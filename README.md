@@ -37,6 +37,7 @@ To add a node entity to a node set, attach it as specified: `nodeobject:set_atta
 local nodedef = {
   ...
   function _nodeentity_step(self, dtime, moveresult), -- runs exclusively on node entities, identical to <step> in entity defintions
+  <other callbacks> -- current entity is appended to the end of function arguments
   ...
 }
 ```
