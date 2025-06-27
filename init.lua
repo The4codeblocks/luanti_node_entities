@@ -450,7 +450,7 @@ core.register_on_player_receive_fields(function(player, formname, fields)
 		local def = core.registered_nodes[nodename]
 		local entity = nodeentities[data[2]]
 		init_context(entity)
-		def.on_receive_fields(construct_relpos(entity), formname, fields, player)
+		def.on_receive_fields(construct_relpos(entity), formname, fields, player, entity)
 		fin_context()
 	end
 end)
@@ -540,40 +540,40 @@ local function register_nodeentity(nodename)
 		return {
 		allow_move = def.allow_metadata_inventory_move and function(inv, from_list, from_index, to_list, to_index, count, player)
 			init_context(entity)
-			local r = def.allow_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player)
+			local r = def.allow_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 			fin_context()
 			return r
 		end,
 
 		allow_put = def.allow_metadata_inventory_put and function(inv, listname, index, stack, player)
 			init_context(entity)
-			local r = def.allow_metadata_inventory_put(relpos, listname, index, stack, player)
+			local r = def.allow_metadata_inventory_put(relpos, listname, index, stack, player, entity)
 			fin_context()
 			return r
 		end,
 
 		allow_take = def.allow_metadata_inventory_take and function(inv, listname, index, stack, player)
 			init_context(entity)
-			local r = def.allow_metadata_inventory_take(relpos, listname, index, stack, player)
+			local r = def.allow_metadata_inventory_take(relpos, listname, index, stack, player, entity)
 			fin_context()
 			return r
 		end,
 		
 		on_move = def.on_metadata_inventory_move and function(inv, from_list, from_index, to_list, to_index, count, player)
 			init_context(entity)
-			def.on_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player)
+			def.on_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 			fin_context()
 		end,
 
 		on_put = def.on_metadata_inventory_put and function(inv, listname, index, stack, player)
 			init_context(entity)
-			def.on_metadata_inventory_put(relpos, listname, index, stack, player)
+			def.on_metadata_inventory_put(relpos, listname, index, stack, player, entity)
 			fin_context()
 		end,
 
 		on_take = def.on_metadata_inventory_take and function(inv, listname, index, stack, player)
 			init_context(entity)
-			def.on_metadata_inventory_take(relpos, listname, index, stack, player)
+			def.on_metadata_inventory_take(relpos, listname, index, stack, player, entity)
 			fin_context()
 		end,
 	} end
@@ -587,7 +587,7 @@ local function register_nodeentity(nodename)
 				type = "node",
 				under = self.object:get_pos(),
 				above = nil
-			})
+			}, entity)
 			fin_context()
 		end
 	else
@@ -604,10 +604,11 @@ local function register_nodeentity(nodename)
 				if self._NOELIM then return end
 				init_context(self)
 				if removal then
-					def.on_destruct(construct_relpos(self))
+					def.on_destruct(construct_relpos(self), self)
+					local node = self.object:get_properties().node
 					nodeentities[self._eID] = nil
 					usednames:set_string(self._eID, "")
-					def.after_destruct(self.object:get_pos())
+					def.after_destruct(self.object:get_pos(), node, self)
 				else
 					self.NOREMOVE = true
 				end
@@ -618,7 +619,7 @@ local function register_nodeentity(nodename)
 				if self._NOELIM then return end
 				init_context(self)
 				if removal then
-					def.on_destruct(construct_relpos(self))
+					def.on_destruct(construct_relpos(self), self)
 					nodeentities[self._eID] = nil
 					usednames:set_string(self._eID, "")
 				else
@@ -632,9 +633,10 @@ local function register_nodeentity(nodename)
 			if self._NOELIM then return end
 			init_context(self)
 			if removal then
+				local node = self.object:get_properties().node
 				nodeentities[self._eID] = nil
 				usednames:set_string(self._eID, "")
-				def.after_destruct(self.object:get_pos())
+				def.after_destruct(self.object:get_pos(), node, self)
 			else
 				self.NOREMOVE = true
 			end
@@ -656,7 +658,7 @@ local function register_nodeentity(nodename)
 	if def.after_dig_node then
 		local death = function(self, killer)
 			init_context(self)
-			def.after_dig_node(self.object:get_pos(), self.object:get_properties().node, self._metadata, killer)
+			def.after_dig_node(self.object:get_pos(), self.object:get_properties().node, self._metadata, killer, self)
 			fin_context()
 		end
 	end
@@ -671,8 +673,8 @@ local function register_nodeentity(nodename)
 					type = "node",
 					under = self.object:get_pos(),
 					above = nil
-				})
-				if not def.can_dig(relpos, puncher) then
+				}, self)
+				if not def.can_dig(relpos, puncher, self) then
 					fin_context()
 					return true
 				end
@@ -685,14 +687,14 @@ local function register_nodeentity(nodename)
 					type = "node",
 					under = self.object:get_pos(),
 					above = nil
-				})
+				}, self)
 				fin_context()
 			end
 		end
 	elseif def.can_dig then
 		punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir, damage)
 			init_context(self)
-			if not def.can_dig(construct_relpos(self), puncher) then
+			if not def.can_dig(construct_relpos(self), puncher, self) then
 				fin_context()
 				return true
 			end
@@ -754,7 +756,7 @@ local function register_nodeentity(nodename)
 
 				if staticdata ~= "NOUPD" then
 					init_context(self)
-					def.on_construct(construct_relpos(self))
+					def.on_construct(construct_relpos(self), self)
 					fin_context()
 				end
 			end
@@ -837,7 +839,7 @@ local function register_nodeentity(nodename)
 		local pos = construct_relpos(self)
 		local timer = self._timer
 		if timer:tick(dtime) then
-			if def.on_timer(pos, timer.prevtimeout) then
+			if def.on_timer(pos, timer.prevtimeout, self) then
 				timer:start(timer.prevtimeout)
 			end
 		end
