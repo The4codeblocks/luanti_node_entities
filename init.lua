@@ -765,7 +765,7 @@ local function register_nodeentity(nodename)
 				if not lbm.run_at_every_load then return end -- known flaw
 				for _, name in ipairs(lbm.nodenames) do
 					if (node.name == name) or ((name:sub(1,6) == "group:") and (core.get_item_group(node.name, name:sub(7)) ~= 0)) then
-						lbm.action(construct_relpos(self), node, dtime_s)
+						lbm.action(construct_relpos(self), node, dtime_s, self)
 						break
 					end
 				end
@@ -827,7 +827,7 @@ local function register_nodeentity(nodename)
 				if not lbm.run_at_every_load then return end -- known flaw
 				for _, name in ipairs(lbm.nodenames) do
 					if (node.name == name) or ((name:sub(1,6) == "group:") and (core.get_item_group(node.name, name:sub(7)) ~= 0)) then
-						lbm.action(construct_relpos(self), node, dtime_s)
+						lbm.action(construct_relpos(self), node, dtime_s, self)
 						break
 					end
 				end
@@ -859,7 +859,7 @@ local function register_nodeentity(nodename)
 				for _, name in ipairs(abm.nodenames) do
 					if (node.name == name) or ((name:sub(1,6) == "group:") and (core.get_item_group(node.name, name:sub(7)) ~= 0)) then
 						if check_neighbors(pos, abm.neighbors, abm.without_neighbors) then
-							abm.action(pos, node, 0, 0) -- missing object counts
+							abm.action(pos, node, 0, 0, self, dtime, moveresult) -- missing object counts
 						end
 						break
 					end
