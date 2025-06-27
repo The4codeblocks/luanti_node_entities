@@ -888,7 +888,7 @@ local function register_nodeentity(nodename)
 		selfbox = { -0.125, -0.125, -0.125, 0.125, 0.125, 0.125, rotate = true }
 	end
 
-	core.register_entity(entityname, {
+	core.register_entity(":"..entityname, {
 		initial_properties = {
 
 			physical = def.walkable or (def.walkable == nil),
@@ -1012,7 +1012,7 @@ core.register_entity(nodesetname, {
 
 local function add_nodeentity(pos, node, noupdate)
 	if not registered[node.name] then register_nodeentity(node.name) end
-	local ref = core.add_entity(pos, "nodeentity:"..node.name:gsub(":","__"), noupdate and "NOUPD")
+	local ref = core.add_entity(pos, registered[node.name], noupdate and "NOUPD")
 	ref:set_properties({node = node})
 	return ref
 end
