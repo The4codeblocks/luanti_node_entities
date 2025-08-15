@@ -313,7 +313,7 @@ end
 
 local olddistance = vector.distance
 vector.distance = function(from, to)
-	return olddistance(convert_pos(pos), convert_pos(to))
+	return olddistance(convert_pos(from), convert_pos(to))
 end
 
 local oldoffset = vector.offset
