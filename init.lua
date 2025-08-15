@@ -287,7 +287,7 @@ end
 
 local oldsoundplay = core.sound_play
 core.sound_play = function(spec, parameters, ephemeral)
-	if not parameters.pos then return oldsoundplay(spec, parameters, ephermal) end
+	if not parameters.pos then return oldsoundplay(spec, parameters, ephemeral) end
 	local parameters = table.copy(parameters)
 	local pos = parameters.pos
 	local nodeentitypos = find_nodeentity(pos)
@@ -297,7 +297,7 @@ core.sound_play = function(spec, parameters, ephemeral)
 		else
 			parameters.pos = pos
 		end
-		oldsoundplay(spec, parameters, ephermal)
+		oldsoundplay(spec, parameters, ephemeral)
 	end
 end
 
