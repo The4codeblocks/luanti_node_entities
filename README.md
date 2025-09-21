@@ -4,7 +4,7 @@ Library for functional node entities, with minimal setup
 ## Namespace reference
 ```lua
 nodeentity = {
-  function add(pos, node, noupdate), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)
+  function add(pos, node), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)
   function read_world(pos, anchor, minp, maxp), -- creates a nodeset at <pos> with nodes from <minp> to <maxp> relative to <anchor>
   -- exposed internal tables
   nodeentities = {[entityID] = luaentity}, -- table of node entities, not guaranteed to be active
