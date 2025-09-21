@@ -117,6 +117,7 @@ local create_detached_nodetimer = function()
 end
 
 local convert_pos = function(pos)
+	if not pos then return nil end
 	if pos.relative then
 		local entity = nodeentities[pos.relative]
 		if not entity then return end
@@ -433,7 +434,48 @@ relativize_func(vector, "apply")
 relativize_func(vector, "rotate_around_axis")
 relativize_func(vector, "rotate")
 
-convert_func2(core, "add_entity")
+convert_func(core, "spawn_falling_node")
+convert_func(core, "get_natural_light")
+convert_func(core, "add_entity")
+convert_func(core, "punch_node")
+convert_func(core, "place_node")
+convert_func(core, "dig_node")
+convert_func(core, "add_item")
+convert_func(core, "get_objects_inside_radius")
+convert_func(core, "objects_inside_radius")
+convert_func(core, "find_node_near") -- WISHME: include node entities
+convert_func(core, "get_heat")
+convert_func(core, "get_humidity")
+convert_func(core, "get_biome_data")
+convert_func(core, "spawn_tree")
+convert_func(core, "transforming_liquid_add")
+convert_func(core, "get_node_max_level") -- WISHME: include node entities
+convert_func(core, "get_node_level") -- WISHME: include node entities
+convert_func(core, "set_node_level") -- WISHME: include node entities
+convert_func(core, "add_node_level")
+convert_func(core, "check_single_for_falling")
+convert_func(core, "check_for_falling")
+convert_func(core, "add_item")
+convert_func(core, "add_item")
+
+convert_func2(core, "get_objects_in_area")
+convert_func2(core, "objects_in_area")
+convert_func2(core, "find_nodes_in_area") -- WISHME: include node entities
+convert_func2(core, "find_nodes_in_area_under_air") -- WISHME: include node entities
+convert_func2(core, "load_area")
+convert_func2(core, "emerge_area")
+convert_func2(core, "delete_area")
+convert_func2(core, "line_of_sight")
+convert_func2(core, "raycast")
+convert_func2(core, "find_path")
+convert_func2(core, "fix_light")
+convert_func2(core, "dig_node")
+convert_func2(core, "dig_node")
+convert_func2(core, "dig_node")
+convert_func2(core, "dig_node")
+
+convert_method2(core, "generate_ores")
+convert_method2(core, "generate_decorations")
 
 local oldnew = vector.new
 vector.new = function(x, y, z, r)
