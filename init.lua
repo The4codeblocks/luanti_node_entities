@@ -299,6 +299,8 @@ local construct_relpos = function(entity)
 	return pos
 end
 
+nodeentity.relative_pos = construct_relpos
+
 local oldsoundplay = core.sound_play
 core.sound_play = function(spec, parameters, ephemeral)
 	if not parameters.pos then return oldsoundplay(spec, parameters, ephemeral) end
