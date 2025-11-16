@@ -4,8 +4,10 @@ Library for functional node entities, with minimal setup
 ## Namespace reference
 ```lua
 nodeentity = {
-  function add(pos, node), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)
+  function add(pos, node), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)  
   function read_world(pos, anchor, minp, maxp), -- creates a nodeset at <pos> with nodes from <minp> to <maxp> relative to <anchor>
+  function relative_pos(entity), -- given a node luaentity, a position is constructed from which to access the node entity like one'd access normal nodes
+
   -- exposed internal tables
   nodeentities = {[entityID] = luaentity}, -- table of node entities, not guaranteed to be active
   fs_context = {
@@ -20,7 +22,7 @@ nodeentity = {
 ```lua
 local position = {
   x, y, z -- position components
-  relative = entityID -- optional relativity specifier, makes the position relative to the specified node entity or its corresponding node entity set
+  relative = entityID -- optional relativity specifier; when present, the position is relative to the specified node entity or its corresponding node entity set
 }
 ```
 These relative positions should work in most `core` namespace functions (library feature), if any of them don't work, make an issue
@@ -51,3 +53,4 @@ local entity = {
   _eID, -- current entity's persistent node entity ID
   ...
 }
+```
