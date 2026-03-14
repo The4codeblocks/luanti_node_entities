@@ -25,7 +25,7 @@ local position = {
   relative = entityID -- optional relativity specifier; when present, the position is relative to the specified node entity or its corresponding node entity set
 }
 ```
-`core`/`vector` namespace functions are wrapped to work with these positions
+`core`/`vector` namespace functions and `ObjectRef`/`Voxelmanip` methods are wrapped to work with these positions
 <br><sup>if any of them don't work, make an issue</sup>
 
 ## Node entity sets (`"nodeentity:nodeset"`)
