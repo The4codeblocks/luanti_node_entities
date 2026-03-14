@@ -12,7 +12,6 @@ nodeentity = {
   function relative_pos(entity), -- given a node luaentity, a position is constructed from which to access the node entity like one'd access normal nodes
 
   -- exposed internal tables
-  nodeentities = {[entityID] = luaentity}, -- table of node entities, not guaranteed to be active
   fs_context = {
     [formname] = {
       [playername] = {formspec, entity} 
