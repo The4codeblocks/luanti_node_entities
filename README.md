@@ -25,10 +25,11 @@ local position = {
   relative = entityID -- optional relativity specifier; when present, the position is relative to the specified node entity or its corresponding node entity set
 }
 ```
-These relative positions should work in most `core` namespace functions (library feature), if any of them don't work, make an issue
+`core`/`vector` namespace functions are wrapped to work with these positions
+<br><sup>if any of them don't work, make an issue</sup>
 
 ## Node entity sets (`"nodeentity:nodeset"`)
-2 node entities *attached* to the same nodeset are able to access each-other with `core` namespace functions
+2 node entities *attached* to the same nodeset share the same `pos.relative`, and exist at xyz offsets of each-other's positions
 
 To add a node entity to a node set, attach it as specified: `nodeobject:set_attach(nodeset, "", pos * 10)`, the engine requires the pos multiplication, but the automatic inclusion of the entity works as normal
 
