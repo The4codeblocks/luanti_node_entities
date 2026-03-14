@@ -1,6 +1,9 @@
 # Node entity library (`nodeentity`)
 Library for functional node entities, with minimal setup
 
+Node entities should act exactly like normal nodes
+<br><sup>any discrepancy should be reported</sup>
+
 ## Namespace reference
 ```lua
 nodeentity = {
