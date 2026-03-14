@@ -51,7 +51,6 @@ local entity = {
   _metadata, -- imitation of NodeMetaRef
   _invname, -- inventory name used in showing current node entity inventory
   _timer, -- lua implementation of NodeTimerRef
-  _eID, -- current entity's persistent node entity ID
   ...
 }
 ```
