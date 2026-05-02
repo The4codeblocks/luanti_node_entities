@@ -974,8 +974,10 @@ core.register_on_mods_loaded(function()
 		if nodeentitypos then
 			if nodeentitypos.object then
 				return nodeentitypos:get_node()
+			elseif nodeentitypos.x then
+				return oldvmget(self, nodeentitypos)
 			end
-			return oldvmget(self, nodeentitypos)
+			return {name = "air", param1 = 0, param2 = 0}
 		end
 		return {name = "ignore", param1 = 0, param2 = 0}
 	end
