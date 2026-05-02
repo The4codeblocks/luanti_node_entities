@@ -268,10 +268,7 @@ core.get_position_from_hash = function(hash)
 	if type(hash) == "number" then
 		return oldunhash(hash)
 	elseif hash:find("@") then
-		local pos = {}
-		pos.x = tonumber(hash:sub(1, 4), 16)
-		pos.y = tonumber(hash:sub(5, 8), 16)
-		pos.z = tonumber(hash:sub(9, 12), 16)
+		local pos = oldunhash(tostring(hash:sub(1, 12), 16))
 		pos.relative = hash:sub(14)
 		return pos
 	else
