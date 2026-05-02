@@ -8,8 +8,11 @@ local fs_context = {
 	-- index by formname, playername
 }
 
-local entityname = "nodeentity:node"
-local nodesetname = "nodeentity:nodeset"
+local modname = core.get_current_modname()
+local entityname = modname..":node"
+local nodesetname = modname..":nodeset"
+nodeentity.entityname = entityname
+nodeentity.nodesetname = nodesetname
 
 nodeentity.fs_context   = fs_context
 nodeentity.name         = entityname
@@ -19,7 +22,7 @@ local veczero = vector.zero()
 local create_detached_nodemeta = function(name, callbacks)
 	local meta = ItemStack():get_meta()
 	local inv = core.create_detached_inventory(name, callbacks)
-	local detnmmt = table.copy(getmetatable(ItemStack():get_meta()))
+	local detnmmt = table.copy(getmetatable(ItemStack():get_meta())) -- [det]ached [n]ode [m]etadata [m]eta[t]able
 
 	detnmmt.set_tool_capabilities = nil
 	detnmmt.set_wear_bar_params = nil
@@ -69,75 +72,51 @@ local create_detached_nodemeta = function(name, callbacks)
 	return detnmmt
 end
 
-local create_detached_nodetimer = function()
-	return {
-		timeout = 0,
-		elapsed = 0,
-		tick = function(self, dt)
-			if self.timeout > 0 then
-				self.elapsed = self.elapsed + dt
-				if self.elapsed > self.timeout then
-					self.prevtimeout = self.timeout
-					self.timeout = 0
-					return true
+local create_detached_nodetimer
+do
+	local metatable = {
+		__index = {
+			tick = function(self, dt)
+				if self.timeout > 0 then
+					self.elapsed = self.elapsed + dt
+					if self.elapsed > self.timeout then
+						self.prevtimeout = self.timeout
+						self.timeout = 0
+						return true
+					end
 				end
-			end
-			return false
-		end,
-		set = function(self, timeout, elapsed)
-			self.timeout = timeout
-			self.elapsed = elapsed
-		end,
-		start = function(self, timeout)
-			self.timeout = timeout
-			self.elapsed = 0
-		end,
-		stop = function(self)
-			self.timeout = 0
-		end,
-		get_timeout = function(self)
-			return self.timeout
-		end,
-		get_elapsed = function(self)
-			return self.elapsed
-		end,
-		is_started = function(self)
-			return self.timeout > 0
-		end,
-		abm = 0
+				return false
+			end,
+			set = function(self, timeout, elapsed)
+				self.timeout = timeout
+				self.elapsed = elapsed
+			end,
+			start = function(self, timeout)
+				self.timeout = timeout
+				self.elapsed = 0
+			end,
+			stop = function(self)
+				self.timeout = 0
+			end,
+			get_timeout = function(self)
+				return self.timeout
+			end,
+			get_elapsed = function(self)
+				return self.elapsed
+			end,
+			is_started = function(self)
+				return self.timeout > 0
+			end,
+		}
 	}
-end
 
-local oldshowformspec = core.show_formspec
-local newshowformspec = function(entity)
-	local invname = "[detached:"..entity._invname
-	local meta = entity._metadata
-	return function(playername, formname, formspec)
-		while true do
-			local i, j = formspec:find("%$%{.-%}")
-			if not i then break end
-			local key = formspec:sub(i + 2, j - 1)
-			formspec = formspec:gsub("%$%{"..key.."%}", meta:get_string(key))
-		end
-		local oldinvname, _, relpos = entity.object:get_attach()
-		if relpos then
-			oldinvname = ("%%[nodemeta:%d,%d,%d"):format(relpos.x/10, relpos.y/10, relpos.z/10)
-		else
-			oldinvname = "%[nodemeta:0,0,0"
-		end
-		formspec = formspec:gsub(oldinvname, invname):gsub("%[context", invname)
-		fs_context[formname] = fs_context[formname] or {}
-		fs_context[formname][playername] = {formspec, entity}
-		entity._prevfs = formspec
-		oldshowformspec(playername, formname, formspec)
+	create_detached_nodetimer = function()
+		return setmetatable({
+			timeout = 0,
+			elapsed = 0,
+			abm = 0
+		}, metatable)
 	end
-end
-
-local init_context = function(entity)
-	core.show_formspec = newshowformspec(entity)
-end
-local fin_context = function()
-	core.show_formspec = oldshowformspec
 end
 
 local convert_pos = function(pos)
@@ -172,6 +151,22 @@ local find_nodeentity = function(pos)
 	end
 end
 
+nodeentity.get = find_nodeentity
+
+local construct_relpos = function(entity)
+	local nodeset, _, pos = entity.object:get_attach()
+	if nodeset then
+		pos = pos / 10
+		pos.relative = nodeset:get_guid()
+	else
+		pos = vector.zero()
+		pos.relative = entity.object:get_guid()
+	end
+	return pos
+end
+
+nodeentity.relative_pos = construct_relpos
+
 local oldgetmeta = core.get_meta
 core.get_meta = function(pos)
 	local nodeentitypos = find_nodeentity(pos)
@@ -190,7 +185,7 @@ core.get_node = function(pos)
 	if nodeentitypos then
 		if nodeentitypos.name == entityname then
 			return nodeentitypos:get_node()
-		else
+		elseif nodeentitypos.x then -- is a vector
 			return oldgetnode(nodeentitypos)
 		end
 	end
@@ -203,7 +198,7 @@ core.get_node_or_nil = function(pos)
 	if nodeentitypos then
 		if nodeentitypos.object then
 			return nodeentitypos:get_node()
-		else
+		elseif nodeentitypos.x then -- is a vector
 			return oldgetnodeornil(nodeentitypos)
 		end
 	end
@@ -237,9 +232,8 @@ core.set_node = function(pos, node)
 			newnode:set_attach(nodeset, "", vector.multiply(pos, 10))
 			local def = core.registered_nodes[node.name]
 			if def.on_construct then
-				init_context(newnode:get_luaentity())
-				def.on_construct(pos, self)
-				fin_context()
+				local newentity = newnode:get_luaentity()
+				def.on_construct(pos, newentity)
 			end
 		else
 			oldsetnode(nodeentitypos, node)
@@ -284,7 +278,7 @@ end
 
 local oldPTS = core.pos_to_string
 core.pos_to_string = function(pos, precision)
-	local retval = oldPTS(pos)
+	local retval = oldPTS(pos, precision)
 	if pos.relative then
 		retval = retval .. "@" .. pos.relative
 	end
@@ -314,20 +308,6 @@ core.get_node_timer = function(pos)
 		end
 	end
 end
-
-local construct_relpos = function(entity)
-	local nodeset, _, pos = entity.object:get_attach()
-	if nodeset then
-		pos = pos / 10
-		pos.relative = nodeset:get_guid()
-	else
-		pos = vector.zero()
-		pos.relative = entity.object:get_guid()
-	end
-	return pos
-end
-
-nodeentity.relative_pos = construct_relpos
 
 local oldsoundplay = core.sound_play
 core.sound_play = function(spec, parameters, ephemeral)
@@ -540,7 +520,7 @@ relativize_func(vecmetatable, "__sub")
 relativize_func(vecmetatable, "__unm")
 
 local parseformspec = function(formspec, entity)
-	local invname = "[detached:"..entity._invname
+	local invname = "[detached:nodeentity"..entity.object:get_guid()
 	local meta = entity._metadata
 	while true do
 		local i, j = formspec:find("%$%{.-%}")
@@ -548,7 +528,7 @@ local parseformspec = function(formspec, entity)
 		local key = formspec:sub(i + 2, j - 1)
 		formspec = formspec:gsub("%$%{"..key.."%}", meta:get_string(key))
 	end
-	return formspec:gsub("%[nodemeta:0,0,0", invname):gsub("%[context", invname)
+	return formspec:gsub("%[context", invname)
 end
 
 local t = core.registered_on_player_receive_fields
@@ -557,27 +537,23 @@ core.register_last_on_player_receive_fields = function(func)
 	core.callback_origins[func] = {
 		-- may be nil or return nil
 		mod = core.get_current_modname and core.get_current_modname() or "??",
-		name = debug.getinfo(1, "n").name or "??"
+		name = "register_on_player_recieve_fields"
 	}
 end
 
 core.register_last_on_player_receive_fields(function(player, formname, fields) -- ANTIPRIORITY
 	local pname = player:get_player_name()
-	if fs_context[formname] and fs_context[formname][pname] then
-		fin_context()
-		if fields.quit then fs_context[formname][pname] = nil end
+	if fs_context[pname] and fs_context[pname][formname] then
+		if fields.quit then fs_context[pname][formname] = nil end
 	end
 end)
 
 core.register_on_player_receive_fields(function(player, formname, fields)
-	if formname:sub(0, 11) == "nodeentity:" then
-		local data = formname:split(";", true, 1)
-		local nodename = (data[1]):gsub("nodeentity:",""):gsub("__",":")
-		local def = core.registered_nodes[nodename]
-		local entity = core.objects_by_guid[data[2]]:get_luaentity()
-		init_context(entity)
+	if formname:sub(1, #entityname) == entityname then
+		local guid = formname:split(";", true, 1)[2]
+		local entity = core.objects_by_guid[guid]:get_luaentity()
+		local def = core.registered_nodes[entity:get_node().name]
 		def.on_receive_fields(construct_relpos(entity), formname, fields, player, entity)
-		fin_context()
 	end
 end)
 
@@ -595,6 +571,7 @@ local abm_neighbors = {
 	vector.new( 0,-1, 0),
 	vector.new( 1,-1, 0),
 	vector.new(-1, 0, 0),
+--	vector.new( 0, 0, 0),
 	vector.new( 1, 0, 0),
 	vector.new(-1, 1, 0),
 	vector.new( 0, 1, 0),
@@ -657,42 +634,27 @@ local invcallbacks = function(entity)
 	local def = core.registered_nodes[entity:get_node().name]
 	return {
 	allow_move = def.allow_metadata_inventory_move and function(inv, from_list, from_index, to_list, to_index, count, player)
-		init_context(entity)
-		local r = def.allow_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
-		fin_context()
-		return r
+		return def.allow_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 	end,
 
 	allow_put = def.allow_metadata_inventory_put and function(inv, listname, index, stack, player)
-		init_context(entity)
-		local r = def.allow_metadata_inventory_put(relpos, listname, index, stack, player, entity)
-		fin_context()
-		return r
+		return def.allow_metadata_inventory_put(relpos, listname, index, stack, player, entity)
 	end,
 
 	allow_take = def.allow_metadata_inventory_take and function(inv, listname, index, stack, player)
-		init_context(entity)
-		local r = def.allow_metadata_inventory_take(relpos, listname, index, stack, player, entity)
-		fin_context()
-		return r
+		return def.allow_metadata_inventory_take(relpos, listname, index, stack, player, entity)
 	end,
 		
 	on_move = def.on_metadata_inventory_move and function(inv, from_list, from_index, to_list, to_index, count, player)
-		init_context(entity)
-		def.on_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
-		fin_context()
+		return def.on_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 	end,
 
 	on_put = def.on_metadata_inventory_put and function(inv, listname, index, stack, player)
-		init_context(entity)
-		def.on_metadata_inventory_put(relpos, listname, index, stack, player, entity)
-		fin_context()
+		return def.on_metadata_inventory_put(relpos, listname, index, stack, player, entity)
 	end,
 
 	on_take = def.on_metadata_inventory_take and function(inv, listname, index, stack, player)
-		init_context(entity)
-		def.on_metadata_inventory_take(relpos, listname, index, stack, player, entity)
-		fin_context()
+		return def.on_metadata_inventory_take(relpos, listname, index, stack, player, entity)
 	end,
 } end
 
@@ -702,12 +664,13 @@ local rclick = function(self, clicker)
 	local abspos = convert_pos(relpos)
 	local eyepos = clicker:get_pos() + clicker:get_eye_offset():offset(0,clicker:get_properties().eye_height,0)
 	local topos = eyepos + clicker:get_look_dir() * 16
-	local raycast = Raycast(eyepos, topos, true, false, {objects = {[entityname] = true, [nodesetname] = false}})
+	local childoffset = self.object:get_pos() - abspos -- raycasts on children fail miserably (no child offset)
+	local raycast = Raycast(eyepos + childoffset, topos + childoffset, true, false, {objects = {[entityname] = true, [nodesetname] = false}})
 	local raypoint = nil
+	local selfguid = self.object:get_guid()
 	for point in raycast do
-		if point.ref and (point.ref:get_guid() == self.object:get_guid()) then raypoint = point break end
+		if point.ref and (point.ref:get_guid() == selfguid) then raypoint = point break end
 	end
-	core.log(dump(raypoint))
 	if not raypoint then return end
 	local pointed = {
 		type = "node",
@@ -721,12 +684,10 @@ local rclick = function(self, clicker)
 	else
 		local fs = self._metadata:get_string("formspec")
 		if def.on_rightclick then
-			init_context(self)
-			local retval = def.on_rightclick(relpos, self:get_node(), clicker, clicker:get_wielded_item(), pointed, entity)
-			fin_context()
+			local retval = def.on_rightclick(relpos, self:get_node(), clicker, clicker:get_wielded_item(), pointed, self)
 			if retval then clicker:set_wielded_item(retval) end
 		elseif fs ~= "" then
-			self._showfs(clicker:get_player_name(), entityname..";"..self.object:get_guid(), fs)
+			core.show_formspec(clicker:get_player_name(), entityname..";"..self.object:get_guid(), parseformspec(fs, self))
 		elseif clicker then
 			local newstack = core.item_place_node(clicker:get_wielded_item(), clicker, pointed)
 			clicker:set_wielded_item(newstack)
@@ -737,7 +698,6 @@ end
 local deactivate = function(self, removal)
 	local def = core.registered_nodes[self:get_node().name]
 	if self._NOELIM then return end
-	init_context(self)
 	local relpos = construct_relpos(self)
 	if removal then
 		if def.on_destruct then
@@ -750,7 +710,7 @@ local deactivate = function(self, removal)
 	else
 		self._NOREMOVE = true
 	end
-	fin_context()
+	core.remove_detached_inventory("nodeentity" .. self.object:get_guid())
 end
 
 local death = function(self, killer)
@@ -759,15 +719,12 @@ local death = function(self, killer)
 	local absolutepos = convert_pos(construct_relpos(self))
 	core.handle_node_drops(absolutepos, core.get_node_drops(self:get_node(), tool:get_name(), tool, killer, absolutepos), killer)
 	if def.after_dig_node then
-		init_context(self)
 		def.after_dig_node(absolutepos, self:get_node(), self._metadata, killer, self)
-		fin_context()
 	end
 end
 
 local punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir, damage)
 	local def = core.registered_nodes[self:get_node().name]
-	init_context(self)
 	local relpos = construct_relpos(self)
 	local punch = def.on_punch or core.node_punch
 	punch(relpos, self:get_node(), puncher, {
@@ -780,11 +737,9 @@ local punch = function(self, puncher, time_from_last_punch, tool_capabilities, d
 			local dig = def.on_dig or core.node_dig
 			dig(relpos, self:get_node(), puncher, self)
 		else
-			fin_context()
 			return true
 		end
 	end
-	fin_context()
 end
 
 local eval_number = function(str, default)
@@ -808,15 +763,12 @@ local activate = function(self, staticdata, dtime_s)
 		self._NOELIM = true
 		return self.object:remove()
 	end
-	local invname = "nodeentity"..self.object:get_guid()
-	self._invname = invname
-	local metaref = create_detached_nodemeta(invname, invcallbacks(self))
+	local metaref = create_detached_nodemeta("nodeentity" .. self.object:get_guid(), invcallbacks(self))
 	self._metadata = metaref
 	self._timer:set(tonumber(data[1]), tonumber(data[2]))
 	
 	staticdata = data[4]
 	metaref:from_table(core.deserialize(staticdata:sub(5)) or {})
-	self._showfs = newshowformspec(self)
 
 	self:set_node({
 		param1 = eval_number(staticdata:sub(1,2), 240),
@@ -850,7 +802,7 @@ local step = function(self, dtime, moveresult)
 	local parsedfs = parseformspec(fs, self)
 	if self._prevfs and (parsedfs ~= self._prevfs) then
 		for pname, fsc in pairs(fs_context[fname] or {}) do
-			self._showfs(pname, fname, fs)
+			core.show_formspec(pname, fname, fs)
 		end
 	end
 	local newtimerabm = timer.abm + dtime
@@ -934,9 +886,7 @@ core.register_entity(entityname, {
 			local relpos = construct_relpos(self)
 
 			if def.on_construct then
-				init_context(self)
 				def.on_construct(relpos, self)
-				fin_context()
 			end
 		end
 	end,
@@ -1010,8 +960,8 @@ core.register_on_mods_loaded(function()
 	
 	core.register_on_player_receive_fields(function(player, formname, fields)
 		local pname = player:get_player_name()
-		if fs_context[formname] and fs_context[formname][pname] then
-			init_context(fs_context[formname][pname][2])
+		if fs_context[pname] and fs_context[pname][formname] then
+			init_context(fs_context[pname][formname][2])
 		end
 	end)
 	
@@ -1097,3 +1047,59 @@ function nodeentity.read_world(pos, anchor, minp, maxp)
 	end end end
 	return nodeset
 end
+
+local csvify_pos = function(pos)
+	return core.pos_to_string(pos):gsub("[%(%)]", "")
+end
+
+local uncsvify_pos = function(str)
+core.log(str)
+	local separate = str:split("@", true, 1)
+	core.log(dump(separate))
+	local pos = core.string_to_pos("("..separate[1]..")")
+	if not pos then return end
+	pos.relative = separate[2]
+	return pos
+end
+
+local utils = {}
+nodeentity.utils = utils
+utils.pos_to_csv = csvify_pos
+utils.csv_to_pos = uncsvify_pos
+
+do
+	local fs_invloc_init = "%[nodemeta%:"
+	local fs_invloc_init_len = #fs_invloc_init - 2
+	local num = "[%d.-]+"
+	local delim = "[,%s]%s*"
+	local guid = "%@%@[a-zA-Z0-9%/%+]*"
+	local base_pattern = fs_invloc_init .. num .. delim .. num .. delim .. num .. guid
+	local oldshowformspec = core.show_formspec
+	core.show_formspec = function(playername, formname, formspec, ...)
+		local searched = formspec
+		local nformspec = ""
+		while true do
+			local i, j = searched:find(base_pattern)
+			if not i then
+				nformspec = nformspec .. searched
+				break
+			end
+			local head = i > 1 and searched:sub(1, i-1) or ""
+			local tail = j < #searched and searched:sub(j+1, -1) or ""
+			local pos = uncsvify_pos(searched:sub(i + fs_invloc_init_len, j))
+			if pos then
+				local entity, nodeset = find_nodeentity(pos)
+				if entity and entity.object then
+					nformspec = nformspec .. head .. "[detached:nodeentity" .. entity.object:get_guid()
+				end
+			end
+			searched = tail
+		end
+		core.log(nformspec)
+		return oldshowformspec(playername, formname, nformspec, ...)
+	end
+end
+
+local modpath = core.get_modpath(modname).."/"
+
+dofile(modpath.."compat.lua") -- some mods are helplessly incompatible, this is to modify their behavior accordingly
