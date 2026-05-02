@@ -543,8 +543,8 @@ end
 
 core.register_last_on_player_receive_fields(function(player, formname, fields) -- ANTIPRIORITY
 	local pname = player:get_player_name()
-	if fs_context[pname] and fs_context[pname][formname] then
-		if fields.quit then fs_context[pname][formname] = nil end
+	if fs_context[formname] and fs_context[formname][pname] then
+		if fields.quit then fs_context[formname][pname] = nil end
 	end
 end)
 
@@ -957,13 +957,6 @@ end
 
 nodeentity.add = add_nodeentity
 core.register_on_mods_loaded(function()
-	
-	core.register_on_player_receive_fields(function(player, formname, fields)
-		local pname = player:get_player_name()
-		if fs_context[pname] and fs_context[pname][formname] then
-			init_context(fs_context[pname][formname][2])
-		end
-	end)
 	
 	local oldisprotected = core.is_protected
 	core.is_protected = function(pos, player)
