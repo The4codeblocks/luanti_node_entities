@@ -1048,9 +1048,7 @@ local csvify_pos = function(pos)
 end
 
 local uncsvify_pos = function(str)
-core.log(str)
 	local separate = str:split("@", true, 1)
-	core.log(dump(separate))
 	local pos = core.string_to_pos("("..separate[1]..")")
 	if not pos then return end
 	pos.relative = separate[2]
@@ -1090,7 +1088,6 @@ do
 			end
 			searched = tail
 		end
-		core.log(nformspec)
 		return oldshowformspec(playername, formname, nformspec, ...)
 	end
 end
