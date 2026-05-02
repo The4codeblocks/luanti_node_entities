@@ -732,13 +732,11 @@ local punch = function(self, puncher, time_from_last_punch, tool_capabilities, d
 		under = convert_pos(relpos),
 		above = nil
 	}, self)
-	if def.can_dig then
-		if def.can_dig(relpos, puncher, self) then
-			local dig = def.on_dig or core.node_dig
-			dig(relpos, self:get_node(), puncher, self)
-		else
-			return true
-		end
+	if (not def.can_dig) or def.can_dig(relpos, puncher, self) then
+		local dig = def.on_dig or core.node_dig
+		dig(relpos, self:get_node(), puncher, self)
+	else
+		return true
 	end
 end
 
