@@ -268,7 +268,10 @@ core.get_position_from_hash = function(hash)
 	if type(hash) == "number" then
 		return oldunhash(hash)
 	elseif hash:find("@") then
-		local pos = oldunhash(hash:sub(1, 12))
+		local pos = {}
+		pos.x = tonumber(hash:sub(1, 4), 16)
+		pos.y = tonumber(hash:sub(5, 8), 16)
+		pos.z = tonumber(hash:sub(9, 12), 16)
 		pos.relative = hash:sub(14)
 		return pos
 	else
@@ -903,12 +906,8 @@ core.register_entity(nodesetname, {
 		textures = {"blank.png", "blank.png"},
 
 		shaded = false,
-
-		static_save = true,
-		-- If false, never save this object statically. It will simply be
-		-- deleted when the block gets unloaded.
-		-- The get_staticdata() callback is never called then.
-		-- Defaults to 'true'.
+		pointable = false,
+		
 	},
 	-- A table of object properties, see the `Object properties` section.
 	-- The properties in this table are applied to the object
