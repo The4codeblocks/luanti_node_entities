@@ -40,11 +40,6 @@ local create_detached_nodemeta = function(name, callbacks)
 	detnmmt.to_table = function(self)
 		local t = oldtotable(self)
 		local lists = self:get_inventory():get_lists()
-		for k, l in pairs(lists) do
-			for i, v in ipairs(l) do
-				l[i] = v:to_string()
-			end
-		end
 		t.inventory = lists
 		return t
 	end
@@ -94,6 +89,7 @@ do
 			start = function(self, timeout)
 				self.timeout = timeout
 				self.elapsed = 0
+				self.start_epoch = core.get_us_time()
 			end,
 			stop = function(self)
 				self.timeout = 0
@@ -112,6 +108,7 @@ do
 
 	create_detached_nodetimer = function()
 		return setmetatable({
+			start_epoch = 0,
 			timeout = 0,
 			elapsed = 0,
 			abm = 0
@@ -143,8 +140,8 @@ local find_nodeentity = function(pos)
 	local entity = object:get_luaentity()
 	if entity.name == nodesetname then
 		local guid = entity._attachments[("%04x|%04x|%04x"):format(pos.x + 32768, pos.y + 32768, pos.z + 32768)]
-		local object = core.objects_by_guid[guid]
-		return object and object:is_valid() and object:get_luaentity() or {}, entity.object
+		local nodeobject = core.objects_by_guid[guid]
+		return nodeobject and nodeobject:is_valid() and nodeobject:get_luaentity() or {}, object
 	else
 		if pos ~= veczero then return nil end
 		return entity
@@ -633,27 +630,27 @@ local invcallbacks = function(entity)
 	local relpos = construct_relpos(entity)
 	local def = core.registered_nodes[entity:get_node().name]
 	return {
-	allow_move = def.allow_metadata_inventory_move and function(inv, from_list, from_index, to_list, to_index, count, player)
+	allow_move = def.allow_metadata_inventory_move and function(_, from_list, from_index, to_list, to_index, count, player)
 		return def.allow_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 	end,
 
-	allow_put = def.allow_metadata_inventory_put and function(inv, listname, index, stack, player)
+	allow_put = def.allow_metadata_inventory_put and function(_, listname, index, stack, player)
 		return def.allow_metadata_inventory_put(relpos, listname, index, stack, player, entity)
 	end,
 
-	allow_take = def.allow_metadata_inventory_take and function(inv, listname, index, stack, player)
+	allow_take = def.allow_metadata_inventory_take and function(_, listname, index, stack, player)
 		return def.allow_metadata_inventory_take(relpos, listname, index, stack, player, entity)
 	end,
 		
-	on_move = def.on_metadata_inventory_move and function(inv, from_list, from_index, to_list, to_index, count, player)
+	on_move = def.on_metadata_inventory_move and function(_, from_list, from_index, to_list, to_index, count, player)
 		return def.on_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 	end,
 
-	on_put = def.on_metadata_inventory_put and function(inv, listname, index, stack, player)
+	on_put = def.on_metadata_inventory_put and function(_, listname, index, stack, player)
 		return def.on_metadata_inventory_put(relpos, listname, index, stack, player, entity)
 	end,
 
-	on_take = def.on_metadata_inventory_take and function(inv, listname, index, stack, player)
+	on_take = def.on_metadata_inventory_take and function(_, listname, index, stack, player)
 		return def.on_metadata_inventory_take(relpos, listname, index, stack, player, entity)
 	end,
 } end
@@ -666,7 +663,7 @@ local rclick = function(self, clicker)
 	local topos = eyepos + clicker:get_look_dir() * 16
 	local childoffset = self.object:get_pos() - abspos -- raycasts on children fail miserably (no child offset)
 	local raycast = Raycast(eyepos + childoffset, topos + childoffset, true, false, {objects = {[entityname] = true, [nodesetname] = false}})
-	local raypoint = nil
+	local raypoint
 	local selfguid = self.object:get_guid()
 	for point in raycast do
 		if point.ref and (point.ref:get_guid() == selfguid) then raypoint = point break end
@@ -775,12 +772,14 @@ local activate = function(self, staticdata, dtime_s)
 	})
 
 	local node = self:get_node()
-	for _, lbm in ipairs(core.registered_lbms) do
-		if not lbm.run_at_every_load then return end -- known flaw
-		for _, name in ipairs(lbm.nodenames) do
-			if (node.name == name) or ((name:sub(1,6) == "group:") and (core.get_item_group(node.name, name:sub(7)) ~= 0)) then
-				lbm.action(relpos, node, dtime_s, self)
-				break
+	local relpos = construct_relpos(self)
+	for _, lbm in pairs(core.registered_lbms) do
+		if lbm.run_at_every_load then -- known flaw
+			for _, name in ipairs(lbm.nodenames) do
+				if (node.name == name) or ((name:sub(1,6) == "group:") and (core.get_item_group(node.name, name:sub(7)) ~= 0)) then
+					lbm.action(relpos, node, dtime_s, self)
+					break
+				end
 			end
 		end
 	end
@@ -789,9 +788,10 @@ end
 local step = function(self, dtime, moveresult)
 	local def = core.registered_nodes[self:get_node().name]
 	local pos = construct_relpos(self)
+	local node = self:get_node()
 	local timer = self._timer
 	if timer:tick(dtime) then
-		if def.on_timer(pos, timer.prevtimeout, self) then
+		if def.on_timer(pos, core.get_us_time() - timer.start_epoch, node, timer.prevtimeout, self) then
 			timer:start(timer.prevtimeout)
 		end
 	end
@@ -805,7 +805,6 @@ local step = function(self, dtime, moveresult)
 	end
 	local newtimerabm = timer.abm + dtime
 	self.object:set_properties({infotext = self._metadata:get_string("infotext")})
-	local node = self:get_node()
 	for _, abm in ipairs(core.registered_abms) do
 		if ((timer.abm % abm.interval) > (newtimerabm % abm.interval)) and (math.random(abm.chance) == 1) then
 			for _, name in ipairs(abm.nodenames) do
@@ -903,7 +902,7 @@ core.register_entity(nodesetname, {
 		textures = {"blank.png", "blank.png"},
 
 		shaded = false,
-		pointable = false,
+		pointable = core.settings:get_bool("nodeentity_pointable_nodeset_root", false),
 		
 	},
 	-- A table of object properties, see the `Object properties` section.
@@ -946,7 +945,7 @@ core.register_entity(nodesetname, {
 
 local function add_nodeentity(pos, node)
 	if node.name == "ignore" or node.name == "air" then return end
-	return core.add_entity(pos, entityname, "0|0|"..node.name.."|")
+	return core.add_entity(pos, entityname, string.format("%f|%f|%s|%02x%02x", 0, 0, node.name, node.param1 or 0, node.param2 or 0))
 end
 
 nodeentity.add = add_nodeentity
@@ -1072,7 +1071,7 @@ do
 				break
 			end
 			local head = i > 1 and searched:sub(1, i-1) or ""
-			local tail = j < #searched and searched:sub(j+1, -1) or ""
+			local tail = j < #searched and searched:sub(j+1) or ""
 			local pos = uncsvify_pos(searched:sub(i + fs_invloc_init_len, j))
 			if pos then
 				local entity, nodeset = find_nodeentity(pos)

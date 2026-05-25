@@ -37,7 +37,7 @@ local position = {
 }
 ```
 `core`/`vector` namespace functions and `ObjectRef`/`Voxelmanip` methods are wrapped to work with these positions
-written as `nodemeta:X,Y,Z@relative` in inventory location notation
+`nodemeta:X,Y,Z@relative` inventory location notation represents `{ x = X, y = Y, z = Z, relative = relative }`
 <br><sup>if any of them don't work, make an issue</sup>
 
 ## Node entity sets (`"nodeentity:nodeset"`)
