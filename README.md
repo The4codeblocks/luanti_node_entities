@@ -59,7 +59,6 @@ local nodedef = {
 ```lua
 local entity = {
   ...
-  function _showfs(playername, formname, formspec), -- used like core.show_formspec, includes the nuances in node forms
   _metadata, -- imitation of NodeMetaRef
   _timer, -- Lua implementation of NodeTimerRef
   ...
