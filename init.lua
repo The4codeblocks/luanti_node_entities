@@ -204,10 +204,11 @@ end
 
 local oldswapnode = core.swap_node
 core.swap_node = function(pos, node)
+	if type(node) == "string" then node = {name = node} end
 	local nodeentitypos, nodeset = find_nodeentity(pos)
 	if nodeentitypos then
 		if nodeentitypos.object then
-			nodeentitypos:set_node(node, true)
+			nodeentitypos:set_node(node)
 		elseif nodeset then
 			local newnode = nodeentity.add(nodeset:get_pos():offset(pos.x, pos.y, pos.z), node)
 			newnode:set_attach(nodeset, "", vector.multiply(pos, 10))
@@ -219,18 +220,26 @@ end
 
 local oldsetnode = core.set_node
 core.set_node = function(pos, node)
+	if type(node) == "string" then node = {name = node} end
 	local nodeentitypos, nodeset = find_nodeentity(pos)
 	if nodeentitypos then
 		if nodeentitypos.object then
+			local oldnode = nodeentitypos:get_node()
+			local def = core.registered_nodes[oldnode.name]
+			if def.on_destruct then
+				def.on_destruct(pos, nodeentitypos)
+			end
 			nodeentitypos._metadata:from_table({})
 			nodeentitypos:set_node(node, true)
+			if def.after_destruct then
+				def.after_destruct(pos, oldnode, nodeentitypos)
+			end
 		elseif nodeset then
 			local newnode = nodeentity.add(nodeset:get_pos():offset(pos.x, pos.y, pos.z), node)
 			newnode:set_attach(nodeset, "", vector.multiply(pos, 10))
 			local def = core.registered_nodes[node.name]
 			if def.on_construct then
-				local newentity = newnode:get_luaentity()
-				def.on_construct(pos, newentity)
+				def.on_construct(pos, newnode:get_luaentity())
 			end
 		else
 			oldsetnode(nodeentitypos, node)
@@ -244,7 +253,15 @@ core.remove_node = function(pos)
 	local nodeentitypos = find_nodeentity(pos)
 	if nodeentitypos then
 		if nodeentitypos.object then
+			local oldnode = nodeentitypos:get_node()
+			local def = core.registered_nodes[oldnode.name]
+			if def.on_destruct then
+				def.on_destruct(pos, nodeentitypos)
+			end
 			nodeentitypos.object:remove()
+			if def.after_destruct then
+				def.after_destruct(pos, oldnode, nodeentitypos)
+			end
 		else
 			oldremovenode(nodeentitypos)
 		end
@@ -491,8 +508,13 @@ convert_method2(core, "generate_decorations")
 local oldnew = vector.new
 vector.new = function(x, y, z, r)
 	local newvec = oldnew(x, y, z)
-	newvec.relative = r
+	newvec.relative = r or type(x) == "table" and x.relative
 	return newvec
+end
+
+local oldequals = vector.equals
+vector.equals = function(a, b)
+	return oldequals(a, b) and a.relative == b.relative
 end
 
 local oldadd = vector.add
@@ -548,7 +570,10 @@ end)
 core.register_on_player_receive_fields(function(player, formname, fields)
 	if formname:sub(1, #entityname) == entityname then
 		local guid = formname:split(";", true, 1)[2]
-		local entity = core.objects_by_guid[guid]:get_luaentity()
+		local object = core.objects_by_guid[guid]
+		if not object then return end
+		local entity = object:get_luaentity()
+		if not entity then return end
 		local def = core.registered_nodes[entity:get_node().name]
 		def.on_receive_fields(construct_relpos(entity), formname, fields, player, entity)
 	end
@@ -676,34 +701,34 @@ local rclick = function(self, clicker)
 	}
 	local sneaking = clicker and clicker:get_player_control().sneak
 	if sneaking then
-		local newstack = core.item_place_node(clicker:get_wielded_item(), clicker, pointed)
+		local wielded = clicker:get_wielded_item()
+		local itemname = wielded:get_name()
+		local newstack = core.item_place_node(wielded, clicker, pointed)
 		clicker:set_wielded_item(newstack)
+		local idef = core.registered_nodes[itemname]
+		if idef and idef.on_place then idef.on_place(wielded, clicker, pointed) end
 	else
-		local fs = self._metadata:get_string("formspec")
+		local fs = self._metadata:get("formspec")
 		if def.on_rightclick then
 			local retval = def.on_rightclick(relpos, self:get_node(), clicker, clicker:get_wielded_item(), pointed, self)
 			if retval then clicker:set_wielded_item(retval) end
-		elseif fs ~= "" then
+		end
+		if fs then
 			core.show_formspec(clicker:get_player_name(), entityname..";"..self.object:get_guid(), parseformspec(fs, self))
-		elseif clicker then
-			local newstack = core.item_place_node(clicker:get_wielded_item(), clicker, pointed)
+		elseif clicker and not def.on_rightclick then
+			local wielded = clicker:get_wielded_item()
+			local itemname = wielded:get_name()
+			local newstack = core.item_place_node(wielded, clicker, pointed)
 			clicker:set_wielded_item(newstack)
+			local idef = core.registered_nodes[itemname]
+			if idef and idef.on_place then idef.on_place(wielded, clicker, pointed) end
 		end
 	end
 end
 
 local deactivate = function(self, removal)
-	local def = core.registered_nodes[self:get_node().name]
 	if self._NOELIM then return end
-	local relpos = construct_relpos(self)
 	if removal then
-		if def.on_destruct then
-			def.on_destruct(relpos, self)
-		end
-		if def.after_destruct then
-			local node = self:get_node()
-			def.after_destruct(relpos, node, self)
-		end
 	else
 		self._NOREMOVE = true
 	end
@@ -864,8 +889,10 @@ core.register_entity(entityname, {
 			selbox = { -0.125, -0.125, -0.125, 0.125, 0.125, 0.125, rotate = true }
 		end
 
+		local oldnode = self:get_node()
+
 		self.object:set_properties({
-			node = node,
+			node = {name = node.name, param2 = node.param1 or oldnode.param1, param2 = node.param2 or oldnode.param2},
 			selectionbox = selbox,
 			glow = def.light_source,
 			physical = def.walkable or (def.walkable == nil),
@@ -875,10 +902,8 @@ core.register_entity(entityname, {
 		})
 
 		if init then
-			local relpos = construct_relpos(self)
-
 			if def.on_construct then
-				def.on_construct(relpos, self)
+				def.on_construct(construct_relpos(self), self)
 			end
 		end
 	end,
@@ -973,7 +998,7 @@ core.register_on_mods_loaded(function()
 	end
 
 	local oldvmset = vmanipmeta.set_node_at
-	vmanipmeta.set_node_at = function(self, pos, node)
+	vmanipmeta.set_node_at = function(self, pos, node) -- TODO: move emptiness checks to inside the added function, to avoid late write problems
 		local nodeentitypos, attachment = find_nodeentity(pos)
 		if nodeentitypos then
 			if nodeentitypos.object then
@@ -996,7 +1021,7 @@ core.register_on_mods_loaded(function()
 	vmanipmeta.write_to_map = function(self, light)
 		oldvmwrite(self, light)
 		if not uncommited[self] then return end
-		for k, v in pairs(uncommited[self]) do v() end
+		for _, v in pairs(uncommited[self]) do v() end
 	end
 
 	local dummy = core.add_entity(veczero, nodesetname)
