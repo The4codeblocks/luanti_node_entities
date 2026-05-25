@@ -720,7 +720,7 @@ local death = function(self, killer)
 	end
 end
 
-local punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir, damage)
+local punch = function(self, puncher) --, time_from_last_punch, tool_capabilities, dir, damage)
 	local def = core.registered_nodes[self:get_node().name]
 	local relpos = construct_relpos(self)
 	local punch = def.on_punch or core.node_punch
@@ -740,11 +740,6 @@ end
 local eval_number = function(str, default)
 	if str == "" then return default end
 	return tonumber(str, 16)
-end
-
-local eval_string = function(str, default)
-	if str == "" then return default end
-	return str
 end
 
 local activate = function(self, staticdata, dtime_s)
@@ -799,7 +794,7 @@ local step = function(self, dtime, moveresult)
 	local fs = self._metadata:get_string("formspec")
 	local parsedfs = parseformspec(fs, self)
 	if self._prevfs and (parsedfs ~= self._prevfs) then
-		for pname, fsc in pairs(fs_context[fname] or {}) do
+		for pname, _ in pairs(fs_context[fname] or {}) do
 			core.show_formspec(pname, fname, fs)
 		end
 	end
@@ -910,14 +905,14 @@ core.register_entity(nodesetname, {
 	-- once when it is spawned.
 
 	-- Refer to the "Registered entities" section for explanations
-	on_activate = function(self, staticdata, dtime_s)
+	on_activate = function(self, staticdata, _)
 		if staticdata and staticdata ~= "" then
 			self._attachments = core.deserialize(staticdata)
 		else
 			self._attachments = {}
 		end
 	end,
-	on_step = function(self, dtime, moveresult)
+	on_step = function(self, _, _)
 		if not self._attachments then return end
 		for pos, guid in pairs(self._attachments) do
 			local child = core.objects_by_guid[guid]
@@ -950,12 +945,14 @@ end
 
 nodeentity.add = add_nodeentity
 core.register_on_mods_loaded(function()
-	
+
+	--[[
 	local oldisprotected = core.is_protected
 	core.is_protected = function(pos, player)
 		local pos = convert_pos(pos)
 		if pos then return oldisprotected(pos, player) end
 	end
+	]]
 
 	core.after(0, function()
 
@@ -1054,7 +1051,7 @@ utils.pos_to_csv = csvify_pos
 utils.csv_to_pos = uncsvify_pos
 
 do
-	local fs_invloc_init = "%[nodemeta%:"
+	local fs_invloc_init = "nodemeta%:"
 	local fs_invloc_init_len = #fs_invloc_init - 2
 	local num = "[%d.-]+"
 	local delim = "[,%s]%s*"
@@ -1074,9 +1071,9 @@ do
 			local tail = j < #searched and searched:sub(j+1) or ""
 			local pos = uncsvify_pos(searched:sub(i + fs_invloc_init_len, j))
 			if pos then
-				local entity, nodeset = find_nodeentity(pos)
+				local entity = find_nodeentity(pos)
 				if entity and entity.object then
-					nformspec = nformspec .. head .. "[detached:nodeentity" .. entity.object:get_guid()
+					nformspec = nformspec .. head .. "detached:nodeentity" .. entity.object:get_guid()
 				end
 			end
 			searched = tail
