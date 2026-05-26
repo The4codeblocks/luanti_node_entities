@@ -103,6 +103,12 @@ if core.global_exists("digilines") then
 			return oldgetnode(pos)
 		end
 	end
+	function digilines.addPosRule(p, r)
+		return vector.add(p, r)
+	end
+	function digilines.cmpPos(p1, p2)
+		return vector.equals(p1, p2)
+	end
 end
 
 -- mesecons_luacontroller: init.lua
