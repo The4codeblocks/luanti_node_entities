@@ -67,53 +67,54 @@ local create_detached_nodemeta = function(name, callbacks)
 	return detnmmt
 end
 
-local create_detached_nodetimer
-do
-	local metatable = {
-		__index = {
-			tick = function(self, dt)
-				if self.timeout > 0 then
-					self.elapsed = self.elapsed + dt
-					if self.elapsed > self.timeout then
-						self.prevtimeout = self.timeout
-						self.timeout = 0
-						return true
-					end
+local nodetimer_metatable = {
+	__index = {
+		tick = function(self, dt)
+			if self.timeout > 0 then
+				self.elapsed = self.elapsed + dt
+				if self.elapsed > self.timeout then
+					self.prevtimeout = self.timeout
+					self.timeout = 0
+					return true
 				end
-				return false
-			end,
-			set = function(self, timeout, elapsed)
-				self.timeout = timeout
-				self.elapsed = elapsed
-			end,
-			start = function(self, timeout)
-				self.timeout = timeout
-				self.elapsed = 0
-				self.start_epoch = core.get_us_time()
-			end,
-			stop = function(self)
-				self.timeout = 0
-			end,
-			get_timeout = function(self)
-				return self.timeout
-			end,
-			get_elapsed = function(self)
-				return self.elapsed
-			end,
-			is_started = function(self)
-				return self.timeout > 0
-			end,
-		}
+			end
+			return false
+		end,
+		set = function(self, timeout, elapsed)
+			self.timeout = timeout
+			self.elapsed = elapsed
+		end,
+		start = function(self, timeout)
+			self.timeout = timeout
+			self.elapsed = 0
+			self.start_epoch = core.get_us_time()
+		end,
+		stop = function(self)
+			self.timeout = 0
+		end,
+		get_timeout = function(self)
+			return self.timeout
+		end,
+		get_elapsed = function(self)
+			return self.elapsed
+		end,
+		is_started = function(self)
+			return self.timeout > 0
+		end,
+		start_epoch = 0,
+		timeout = 0,
+		elapsed = 0,
+		abm = 0,
 	}
+}
 
-	create_detached_nodetimer = function()
-		return setmetatable({
-			start_epoch = 0,
-			timeout = 0,
-			elapsed = 0,
-			abm = 0
-		}, metatable)
-	end
+local create_detached_nodetimer = function()
+	return setmetatable({
+		start_epoch = 0,
+		timeout = 0,
+		elapsed = 0,
+		abm = 0,
+	}, nodetimer_metatable)
 end
 
 local convert_pos = function(pos)
@@ -122,8 +123,7 @@ local convert_pos = function(pos)
 		local object = core.objects_by_guid[pos.relative]
 		if not object then return nil end
 		if object:is_valid() then
-			local drawscale = object:get_properties().visual_size
-			return object:get_pos() + vector.new(pos.x * drawscale.x, pos.y * drawscale.y, pos.z * (drawscale.z or drawscale.x)):rotate(object:get_rotation())
+			return object:get_pos() + vector.multiply(pos, object:get_luaentity()._scale):rotate(object:get_rotation())
 		end
 	else
 		return pos
@@ -153,7 +153,7 @@ nodeentity.get = find_nodeentity
 local construct_relpos = function(entity)
 	local nodeset, _, pos = entity.object:get_attach()
 	if nodeset then
-		pos = pos / 10
+		pos = pos / (10 * nodeset:get_luaentity()._scale)
 		pos.relative = nodeset:get_guid()
 	else
 		pos = vector.zero()
@@ -211,7 +211,7 @@ core.swap_node = function(pos, node)
 			nodeentitypos:set_node(node)
 		elseif nodeset then
 			local newnode = nodeentity.add(nodeset:get_pos():offset(pos.x, pos.y, pos.z), node)
-			newnode:set_attach(nodeset, "", vector.multiply(pos, 10))
+			nodeset:get_luaentity():add_node(pos, newnode)
 		else
 			oldswapnode(nodeentitypos, node)
 		end
@@ -236,7 +236,7 @@ core.set_node = function(pos, node)
 			end
 		elseif nodeset then
 			local newnode = nodeentity.add(nodeset:get_pos():offset(pos.x, pos.y, pos.z), node)
-			newnode:set_attach(nodeset, "", vector.multiply(pos, 10))
+			nodeset:get_luaentity():add_node(pos, newnode)
 			local def = core.registered_nodes[node.name]
 			if def.on_construct then
 				def.on_construct(pos, newnode:get_luaentity())
@@ -666,7 +666,7 @@ local invcallbacks = function(entity)
 	allow_take = def.allow_metadata_inventory_take and function(_, listname, index, stack, player)
 		return def.allow_metadata_inventory_take(relpos, listname, index, stack, player, entity)
 	end,
-		
+
 	on_move = def.on_metadata_inventory_move and function(_, from_list, from_index, to_list, to_index, count, player)
 		return def.on_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 	end,
@@ -726,13 +726,8 @@ local rclick = function(self, clicker)
 	end
 end
 
-local deactivate = function(self, removal)
-	if self._NOELIM then return end
-	if removal then
-	else
-		self._NOREMOVE = true
-	end
-	core.remove_detached_inventory("nodeentity" .. self.object:get_guid())
+local deactivate = function(self)
+	if self._metadata then core.remove_detached_inventory("nodeentity" .. self.object:get_guid()) end
 end
 
 local death = function(self, killer)
@@ -762,34 +757,37 @@ local punch = function(self, puncher) --, time_from_last_punch, tool_capabilitie
 	end
 end
 
-local eval_number = function(str, default)
-	if str == "" then return default end
-	return tonumber(str, 16)
-end
+local nodeentity_deserializations = {
+	function(self, data) -- version 1
+		self._scale = data.scale or 1
+		local node = data.node
+		self:set_node({
+			param1 = node.param1 or 240,
+			param2 = node.param2 or core.registered_nodes[node.name].place_param2,
+			name   = node.name
+		})
+		if data.timer then
+			self._timer = setmetatable(data.timer, nodetimer_metatable)
+		else
+			self._timer = create_detached_nodetimer()
+		end
+		local metaref = create_detached_nodemeta("nodeentity" .. (self.object:get_guid() or data.guid), invcallbacks(self))
+		self._metadata = metaref
+		metaref:from_table(data.metadata or {})
+	end,
+}
 
 local activate = function(self, staticdata, dtime_s)
-	self._timer = create_detached_nodetimer()
-	local data = {"", "", "", ""}
-	if staticdata and (staticdata ~= "") then
-		data = staticdata:split("|", true, 3)
-	end
-	local nodename = data[3]
-	if nodename == "ignore" or nodename == "air" or nodename == "" then
-		self._NOELIM = true
+	-- do return self.object:remove() end -- in case of error loop
+	if not staticdata then return self.object:remove() end
+	if not self.object:is_valid() then return end
+	if staticdata:sub(1,6) == "return" then
+		local data = core.deserialize(staticdata)
+		local version = data.__version or 1
+		nodeentity_deserializations[version](self, data)
+	else
 		return self.object:remove()
 	end
-	local metaref = create_detached_nodemeta("nodeentity" .. self.object:get_guid(), invcallbacks(self))
-	self._metadata = metaref
-	self._timer:set(tonumber(data[1]), tonumber(data[2]))
-	
-	staticdata = data[4]
-	metaref:from_table(core.deserialize(staticdata:sub(5)) or {})
-
-	self:set_node({
-		param1 = eval_number(staticdata:sub(1,2), 240),
-		param2 = eval_number(staticdata:sub(3,4), core.registered_nodes[nodename].place_param2),
-		name   = nodename
-	})
 
 	local node = self:get_node()
 	local relpos = construct_relpos(self)
@@ -871,22 +869,45 @@ core.register_entity(entityname, {
 		return self.object:get_properties().node
 	end,
 	set_node = function(self, node, init)
+		if node.name == "air" or node.name == "ignore" then
+			self.object:remove()
+			return
+		end
+
 		local def = core.registered_nodes[node.name]
+		if not def then return end
 
 		local selbox
 		if def.selection_box.type == "regular" then
 			selbox = { -0.5, -0.5, -0.5, 0.5, 0.5, 0.5, rotate = true }
 		elseif def.selection_box.fixed then
 			selbox = def.selection_box.fixed
-			if selbox then
-				if type(selbox[1]) == "table" then selbox = selbox[1] end
-			else
-				selbox = (def.drawtype == "nodebox") and def.node_box
-			end
+			if type(selbox[1]) == "table" then selbox = selbox[1] end
 			selbox = selbox and table.copy(selbox)
 			selbox.rotate = true
 		else
 			selbox = { -0.125, -0.125, -0.125, 0.125, 0.125, 0.125, rotate = true }
+		end
+
+		local colbox
+		local colbox_def = def.collision_box or {type = "regular"}
+		if colbox_def.type == "regular" then
+			colbox = { -0.5, -0.5, -0.5, 0.5, 0.5, 0.5, rotate = true }
+		elseif colbox_def.fixed then
+			colbox = colbox_def.fixed
+			if type(colbox[1]) == "table" then colbox = colbox[1] end
+			colbox = colbox and table.copy(colbox)
+			colbox.rotate = true
+		else
+			colbox = { -0.125, -0.125, -0.125, 0.125, 0.125, 0.125, rotate = true }
+		end
+
+		local scale = self._scale
+		for i,n in ipairs(selbox) do
+			selbox[i] = n * scale
+		end
+		for i,n in ipairs(colbox) do
+			colbox[i] = n * scale
 		end
 
 		local oldnode = self:get_node()
@@ -898,7 +919,8 @@ core.register_entity(entityname, {
 			physical = def.walkable or (def.walkable == nil),
 			--pointable = true, --def.pointable or (def.pointable == nil),
 			collide_with_objects = def.walkable or (def.walkable == nil),
-			collisionbox = def.collision_box or (def.drawtype == "nodebox" and def.node_box),
+			collisionbox = colbox,
+			visual_size = vector.new(scale, scale, scale)
 		})
 
 		if init then
@@ -907,15 +929,39 @@ core.register_entity(entityname, {
 			end
 		end
 	end,
+	set_scale = function(self, newscale)
+		self._scale = newscale
+		self:set_node(self:get_node())
+	end,
 	get_staticdata = function(self)
-		local node = self:get_node()
-		local timer = self._timer
-		return string.format("%f|%f|%s|%02x%02x%s", timer.timeout, timer.elapsed, node.name, node.param1, node.param2, (self._metadata and core.serialize(self._metadata:to_table())) or "")
+		local metadata = self._metadata and self._metadata:to_table()
+		if metadata and metadata.inventory then
+			for _, inv in pairs(metadata.inventory) do
+				for i, v in ipairs(inv) do
+					inv[i] = v:to_string()
+				end
+			end
+		end
+		return core.serialize({
+			node = self:get_node(),
+			metadata = metadata,
+			timer = self._timer,
+			scale = self._scale,
+			guid = self.object:get_guid(), -- sometimes guid isn't accessible during initialization, this ensures that it's remembered
+			__version = 1 -- increment when changes are backwards-incompatible
+		})
 	end,
 })
 
+local nodeset_deserializations = {
+	function(self, data) -- version 1
+		self._attachments = data.attachments or {}
+		self._scale = data.scale or 1
+	end,
+}
+
 core.register_entity(nodesetname, {
-	
+
 	initial_properties = {
 
 		visual =  "upright_sprite",
@@ -923,49 +969,62 @@ core.register_entity(nodesetname, {
 
 		shaded = false,
 		pointable = core.settings:get_bool("nodeentity_pointable_nodeset_root", false),
-		
-	},
-	-- A table of object properties, see the `Object properties` section.
-	-- The properties in this table are applied to the object
-	-- once when it is spawned.
 
-	-- Refer to the "Registered entities" section for explanations
+	},
+
+	add_node = function(self, pos, obj)
+		obj:set_attach(self.object, "", vector.multiply(pos, 10 * self._scale))
+	end,
+	set_scale = function(self, newscale)
+		self._scale = newscale
+	end,
 	on_activate = function(self, staticdata, _)
+		self._attachments = {}
+		self._scale = 1
 		if staticdata and staticdata ~= "" then
-			self._attachments = core.deserialize(staticdata)
-		else
-			self._attachments = {}
+			local data = core.deserialize(staticdata)
+			if data then
+				local version = data.__version or 1
+				nodeset_deserializations[version](self, data)
+			end
 		end
 	end,
 	on_step = function(self, _, _)
 		if not self._attachments then return end
+		local object = self.object
+		local scale = self._scale
 		for pos, guid in pairs(self._attachments) do
 			local child = core.objects_by_guid[guid]
 			if child and child:is_valid() then
 				local listpos = pos:split("|")
-				child:set_attach(self.object, "", 10 * vector.new(tonumber(listpos[1], 16) - 32768, tonumber(listpos[2], 16) - 32768, tonumber(listpos[3], 16) - 32768))
+				child:set_attach(object, "", scale * 10 * vector.new(tonumber(listpos[1], 16) - 32768, tonumber(listpos[2], 16) - 32768, tonumber(listpos[3], 16) - 32768))
+				child:get_luaentity():set_scale(scale)
+			else
+				self._attachments[pos] = nil
 			end
 		end
 	end,
 	on_attach_child = function(self, child)
 		local _, _, attachpos = child:get_attach()
-		self._attachments[("%04x|%04x|%04x"):format(attachpos.x / 10 + 32768, attachpos.y / 10 + 32768, attachpos.z / 10 + 32768)] = child:get_guid()
-	end,
-	on_detach_child = function(self, child)
-		if true then return end
-		local entity = child:get_luaentity()
-		if entity._NOREMOVE then return end
-		local _, _, attachpos = child:get_attach()
-		self._attachments[("%04x|%04x|%04x"):format(attachpos.x / 10 + 32768, attachpos.y / 10 + 32768, attachpos.z / 10 + 32768)] = nil
+		attachpos = attachpos / (10 * self._scale)
+		self._attachments[("%04x|%04x|%04x"):format(attachpos.x + 32768, attachpos.y + 32768, attachpos.z + 32768)] = child:get_guid()
 	end,
 	get_staticdata = function(self)
-		return core.serialize(self._attachments)
+		return core.serialize({
+			attachments = self._attachments,
+			scale = self._scale,
+			__version = 1 -- increment when changes are backwards-incompatible
+		})
 	end,
 })
 
 local function add_nodeentity(pos, node)
+	if type(node) == "string" then node = {name = node} end
 	if node.name == "ignore" or node.name == "air" then return end
-	return core.add_entity(pos, entityname, string.format("%f|%f|%s|%02x%02x", 0, 0, node.name, node.param1 or 0, node.param2 or 0))
+	if not core.registered_nodes[node.name] then return end
+	return core.add_entity(pos, entityname, core.serialize({
+		node = node
+	}))
 end
 
 nodeentity.add = add_nodeentity
@@ -1010,7 +1069,7 @@ core.register_on_mods_loaded(function()
 				uncommited[self] = uncommited[self] or {}
 				uncommited[self][core.hash_node_position(pos)] = function()
 					local newnode = nodeentity.add(attachment.parent:get_pos():offset(pos.x, pos.y, pos.z), node, true)
-					newnode:set_attach(attachment.parent, "", vector.multiply(pos, 10))
+					attachment.parent:get_luaentity():add_node(pos, newnode)
 				end
 			else
 				oldvmset(self, nodeentitypos, node)
@@ -1052,7 +1111,7 @@ function nodeentity.read_world(pos, anchor, minp, maxp)
 			local newobject = add_nodeentity(pos, node)
 			local newentity = newobject:get_luaentity()
 			newentity._metadata:from_table(oldgetmeta(nodepos):to_table())
-			newobject:set_attach(nodeset, "", (nodepos - anchor) * 10)
+			nodeset:get_luaentity():add_node(nodepos - anchor, newobject)
 		end
 	end end end
 	return nodeset
@@ -1077,7 +1136,7 @@ utils.csv_to_pos = uncsvify_pos
 
 do
 	local fs_invloc_init = "nodemeta%:"
-	local fs_invloc_init_len = #fs_invloc_init - 2
+	local fs_invloc_init_len = #fs_invloc_init - 1
 	local num = "[%d.-]+"
 	local delim = "[,%s]%s*"
 	local guid = "%@%@[a-zA-Z0-9%/%+]*"

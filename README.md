@@ -41,9 +41,19 @@ local position = {
 <br><sup>if any of them don't work, make an issue</sup>
 
 ## Node entity sets (`"nodeentity:nodeset"`)
-2 node entities *attached* to the same nodeset share the same `pos.relative`, and exist at xyz offsets of each-other's positions
+2 node entities *attached* to the same nodeset share the same `pos.relative`, and exist at offsets of each-other's positions.
 
-To add a node entity to a node set, attach it as specified: `nodeobject:set_attach(nodeset, "", pos * 10)`, the engine requires the pos multiplication, but the automatic inclusion of the entity works as normal
+### Entity fields
+```lua
+local entity = {
+    ...
+    _attachments, -- internal table for persistent attachment and updating scale of nodeentities
+    _scale, -- scale of nodeset, do not set directly
+    function set_scale(self, newscale), -- sets scale of nodeset
+    function add_node(pos, nodeobject), -- adds a node entity to a node set, only use if the node entity to add is already present
+    ...
+}
+```
 
 ## Node definition interface
 ```lua
@@ -59,6 +69,8 @@ local nodedef = {
 ```lua
 local entity = {
   ...
+  function set_scale(self, newscale), -- sets scale of nodeentity
+  _scale, -- scale of nodeentity, do not set directly
   _metadata, -- imitation of NodeMetaRef
   _timer, -- Lua implementation of NodeTimerRef
   ...
