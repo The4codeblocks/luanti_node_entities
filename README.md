@@ -9,7 +9,8 @@ Node entities should act exactly like normal nodes
 nodeentity = {
 	function add(pos, node), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)
 	function read_world(pos, anchor, minp, maxp), -- creates a nodeset at <pos> with nodes from <minp> to <maxp> relative to <anchor>
-	function relative_pos(object), -- given a node object, a position is constructed from which to access the node entity like one'd access normal nodes
+	function relative_pos(object), -- given a node object, a position is constructed from which to access the node entity like one'd access normal nodes, returns:
+        -- relative_pos, nodeset_exists
 	function get(pos), -- given a position, a node entity is obtained -- returns:
 		-- nodeentity, (entity if present) (pos if pos.relative is absent) (empty table if only nodeset is found) (nil if invalid pos)
 		-- nodeset (nil if invalid pos)

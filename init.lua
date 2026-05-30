@@ -152,14 +152,14 @@ nodeentity.get = find_nodeentity
 
 local construct_relpos = function(entity)
 	local nodeset, _, pos = entity.object:get_attach()
-	if nodeset then
+	if nodeset and pos then
 		pos = pos / (10 * nodeset:get_luaentity()._scale)
 		pos.relative = nodeset:get_guid()
 	else
 		pos = vector.zero()
 		pos.relative = entity.object:get_guid()
 	end
-	return pos
+	return pos, nodeset ~= nil
 end
 
 nodeentity.relative_pos = construct_relpos
@@ -575,7 +575,8 @@ core.register_on_player_receive_fields(function(player, formname, fields)
 		local entity = object:get_luaentity()
 		if not entity then return end
 		local def = core.registered_nodes[entity:get_node().name]
-		def.on_receive_fields(construct_relpos(entity), formname, fields, player, entity)
+		local relpos = construct_relpos(entity)
+		def.on_receive_fields(relpos, formname, fields, player, entity)
 	end
 end)
 
@@ -925,7 +926,8 @@ core.register_entity(entityname, {
 
 		if init then
 			if def.on_construct then
-				def.on_construct(construct_relpos(self), self)
+				local relpos = construct_relpos(self)
+				def.on_construct(relpos, self)
 			end
 		end
 	end,
