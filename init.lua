@@ -783,7 +783,7 @@ local activate = function(self, staticdata, dtime_s)
 	if not self.object:is_valid() then return end
 	if staticdata:sub(1,6) == "return" then
 		local data = core.deserialize(staticdata)
-		local version = data.__version or 1
+		local version = data.__version or 1 -- or <latest>
 		nodeentity_deserializations[version](self, data)
 	else
 		return self.object:remove()
@@ -984,13 +984,14 @@ core.register_entity(nodesetname, {
 		if staticdata and staticdata ~= "" then
 			local data = core.deserialize(staticdata)
 			if data then
-				local version = data.__version or 1
+				local version = data.__version or 1 -- or <latest>
 				nodeset_deserializations[version](self, data)
 			end
 		end
 	end,
 	on_step = function(self, _, _)
 		if not self._attachments then return end
+		if not next(self._attachments) then return self.object:remove() end -- remove when no node entities are attached
 		local object = self.object
 		local scale = self._scale
 		for pos, guid in pairs(self._attachments) do

@@ -7,33 +7,35 @@ Node entities should act exactly like normal nodes
 ## Namespace reference
 ```lua
 nodeentity = {
-  function add(pos, node), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)  
-  function read_world(pos, anchor, minp, maxp), -- creates a nodeset at <pos> with nodes from <minp> to <maxp> relative to <anchor>
-  function relative_pos(object), -- given a node object, a position is constructed from which to access the node entity like one'd access normal nodes
-  function get(pos), -- given a position, a node entity is obtained -- returns:
-    -- nodeentity, (entity if present) (pos if pos.relative is absent) (empty table if only nodeset is found) (nil if invalid pos)
-    -- nodeset (nil if invalid pos)
+	function add(pos, node), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)
+	function read_world(pos, anchor, minp, maxp), -- creates a nodeset at <pos> with nodes from <minp> to <maxp> relative to <anchor>
+	function relative_pos(object), -- given a node object, a position is constructed from which to access the node entity like one'd access normal nodes
+	function get(pos), -- given a position, a node entity is obtained -- returns:
+		-- nodeentity, (entity if present) (pos if pos.relative is absent) (empty table if only nodeset is found) (nil if invalid pos)
+		-- nodeset (nil if invalid pos)
+	entityname, -- name of node entity
+	nodesetname, -- name of nodeset
 
-  -- common utilities written for compatibility
-  utils = {
-    function pos_to_csv(pos), -- returns a csv of a position for use in nodemeta inventory location
-    function csv_to_pos(str), -- inverse of the above
-  },
+	-- common utilities written for compatibility
+	utils = {
+		function pos_to_csv(pos), -- returns a csv of a position for use in nodemeta inventory location
+		function csv_to_pos(str), -- inverse of the above
+	},
 
-  -- exposed internal tables
-  fs_context = {
-    [formname] = {
-      [playername] = {formspec, entity} 
-    }
-  }, -- table of active forms in nodeentities
+	-- exposed internal tables
+	fs_context = {
+		[formname] = {
+			[playername] = {formspec, entity} 
+		}
+	}, -- table of active forms in nodeentities
 }
 ```
 
 ## Position format
 ```lua
 local position = {
-  x, y, z -- position components
-  relative = entityID -- optional relativity specifier; when present, the position is relative to the specified node entity or its corresponding node entity set
+	x, y, z, -- position components
+	relative = entityID -- optional relativity specifier; when present, the position is relative to the specified node entity or its corresponding node entity set
 }
 ```
 `core`/`vector` namespace functions and `ObjectRef`/`Voxelmanip` methods are wrapped to work with these positions
@@ -46,33 +48,56 @@ local position = {
 ### Entity fields
 ```lua
 local entity = {
-    ...
-    _attachments, -- internal table for persistent attachment and updating scale of nodeentities
-    _scale, -- scale of nodeset, do not set directly
-    function set_scale(self, newscale), -- sets scale of nodeset
-    function add_node(pos, nodeobject), -- adds a node entity to a node set, only use if the node entity to add is already present
-    ...
+	...
+	_attachments, -- internal table for persistent attachment and updating scale of nodeentities
+	_scale, -- scale of nodeset, do not set directly
+	function set_scale(self, newscale), -- sets scale of nodeset
+	function add_node(pos, nodeobject), -- adds a node entity to a node set, only use if the node entity to add is already present
+	...
 }
+```
+
+### Serialization fields
+Some fields are omissible
+```lua
+local staticdata = core.serialize({
+    attachments, -- internal table for persistent attachment and updating scale of nodeentities
+    scale, -- scale of nodeset
+    __version = 1 -- serialization version, do not set unless you know what you are doing
+})
 ```
 
 ## Node definition interface
 ```lua
 local nodedef = {
-  ...
-  function _nodeentity_step(self, dtime, moveresult), -- runs exclusively on node entities, identical to <step> in entity defintions
-  <other callbacks> -- current entity is appended to the end of function arguments (abms and lbms included)
-  ...
+	...
+	function _nodeentity_step(self, dtime, moveresult), -- runs exclusively on node entities, identical to <step> in entity defintions
+	<other callbacks> -- current entity is appended to the end of function arguments (abms and lbms included)
+	...
 }
 ```
 
 ## Entity fields
 ```lua
 local entity = {
-  ...
-  function set_scale(self, newscale), -- sets scale of nodeentity
-  _scale, -- scale of nodeentity, do not set directly
-  _metadata, -- imitation of NodeMetaRef
-  _timer, -- Lua implementation of NodeTimerRef
-  ...
+	...
+	function set_scale(self, newscale), -- sets scale of nodeentity
+	_scale, -- scale of nodeentity, do not set directly
+	_metadata, -- imitation of NodeMetaRef
+	_timer, -- Lua implementation of NodeTimerRef
+	...
 }
+```
+
+## Serialization fields
+Some fields are omissible
+```lua
+local staticdata = core.serialize({
+    node, -- MapNode *table*, do not omit!
+    metadata, -- serializable table form of NodeMetaRef, take care to ensure that the inventory section uses itemstrings rather than itemstacks
+    timer, -- Lua implementation of NodeTimerRef, do not set unless you know what you are doing
+    scale, -- nodeentity scale
+    guid, -- guid of node object, do not set!
+    __version = 1 -- serialization version, do not set unless you know what you are doing
+})
 ```
