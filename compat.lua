@@ -113,19 +113,21 @@ end
 
 -- mesecons_luacontroller: init.lua
 
-local BASENAME = "mesecons_luacontroller:luacontroller"
-for a = 0, 1 do -- 0 = off  1 = on
-	for b = 0, 1 do
-		for c = 0, 1 do
-			for d = 0, 1 do
-				local cid = tostring(d)..tostring(c)..tostring(b)..tostring(a)
-				local node_name = BASENAME..cid
-				local old_on_construct = core.registered_nodes[node_name].on_construct
-				core.override_item(node_name, {
-					on_construct = function(pos)
-						old_on_construct(pos)
-					end
-				})
+if core.get_modpath("mesecons_luacontroller") then
+	local BASENAME = "mesecons_luacontroller:luacontroller"
+	for a = 0, 1 do -- 0 = off  1 = on
+		for b = 0, 1 do
+			for c = 0, 1 do
+				for d = 0, 1 do
+					local cid = tostring(d)..tostring(c)..tostring(b)..tostring(a)
+					local node_name = BASENAME..cid
+					local old_on_construct = core.registered_nodes[node_name].on_construct
+					core.override_item(node_name, {
+						on_construct = function(pos)
+							old_on_construct(pos)
+						end
+					})
+				end
 			end
 		end
 	end
