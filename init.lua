@@ -564,7 +564,12 @@ end
 core.register_last_on_player_receive_fields(function(player, formname, fields) -- ANTIPRIORITY
 	local pname = player:get_player_name()
 	if fs_context[formname] and fs_context[formname][pname] then
-		if fields.quit then fs_context[formname][pname] = nil end
+		if fields.quit then
+			fs_context[formname][pname] = nil
+			if not next(fs_context[formname]) then
+				fs_context[formname] = nil
+			end
+		end
 	end
 end)
 
@@ -575,9 +580,9 @@ core.register_on_player_receive_fields(function(player, formname, fields)
 		if not object then return end
 		local entity = object:get_luaentity()
 		if not entity then return end
-		local def = core.registered_nodes[entity:get_node().name]
+		local on_receive_fields = core.registered_nodes[entity:get_node().name].on_receive_fields
 		local relpos = construct_relpos(entity)
-		def.on_receive_fields(relpos, formname, fields, player, entity)
+		if on_receive_fields then on_receive_fields(relpos, formname, fields, player, entity) end
 	end
 end)
 
@@ -716,7 +721,14 @@ local rclick = function(self, clicker)
 			if retval then clicker:set_wielded_item(retval) end
 		end
 		if fs then
-			core.show_formspec(clicker:get_player_name(), entityname..";"..self.object:get_guid(), parseformspec(fs, self))
+			local pname = clicker:get_player_name()
+			local fname = entityname..";"..self.object:get_guid()
+			if fs_context[fname] then
+				fs_context[fname][pname] = true
+			else
+				fs_context[fname] = {[pname] = true}
+			end
+			core.show_formspec(pname, fname, parseformspec(fs, self))
 		elseif clicker and not def.on_rightclick then
 			local wielded = clicker:get_wielded_item()
 			local itemname = wielded:get_name()
@@ -811,7 +823,7 @@ local step = function(self, dtime, moveresult)
 	local node = self:get_node()
 	local timer = self._timer
 	if timer:tick(dtime) then
-		if def.on_timer(pos, core.get_us_time() - timer.start_epoch, node, timer.prevtimeout, self) then
+		if def.on_timer(pos, (core.get_us_time() - timer.start_epoch) * 0.000001, node, timer.prevtimeout, self) then
 			timer:start(timer.prevtimeout)
 		end
 	end
@@ -845,6 +857,46 @@ local step = function(self, dtime, moveresult)
 	if def._nodeentity_step then
 		def._nodeentity_step(self, dtime, moveresult)
 	end
+end
+
+local wallmounted_to_facedir = {
+	[0] = 0, 4, 8, 12, 16, 20, 1, 5
+}
+
+local to_facedir = function(param2, paramtype2)
+	if paramtype2 == "colorfacedir" or paramtype2 == "facedir" then
+		return (param2 % 32) % 24
+	elseif paramtype2 == "4dir" or paramtype2 == "4dir" then
+		return param2 % 4
+	elseif paramtype2 == "wallmounted" or paramtype2 == "colorwallmounted" then
+		return wallmounted_to_facedir[param2 % 8]
+	else
+		return 0
+	end
+end
+
+local facedir_to_up_table = {
+[0]=vector.new( 0,  1,  0),
+	vector.new( 0,  0,  1),
+	vector.new( 0,  0, -1),
+	vector.new( 1,  0,  0),
+	vector.new(-1,  0,  0),
+	vector.new( 0, -1,  0),
+}
+
+local rotate_box_facedir = function(box, facedir)
+	local nbox = table.copy(box)
+	local bmin = vector.new(nbox[1], nbox[2], nbox[3])
+	local bmax = vector.new(nbox[4], nbox[5], nbox[6])
+	local fdir = core.facedir_to_dir(facedir)
+	local udir = facedir_to_up_table[math.floor(facedir/4)]
+	local rdir = vector.cross(fdir, udir)
+	bmin, bmax = vector.sort(
+		fdir * bmin.z + udir * bmin.y + rdir * bmin.x,
+		fdir * bmax.z + udir * bmax.y + rdir * bmax.x
+	)
+	nbox[1], nbox[2], nbox[3], nbox[4], nbox[5], nbox[6] = bmin.x, bmin.y, bmin.z, bmax.x, bmax.y, bmax.z
+	return nbox
 end
 
 core.register_entity(entityname, {
@@ -918,8 +970,14 @@ core.register_entity(entityname, {
 
 		local oldnode = self:get_node()
 
+		local param2 = node.param2 or oldnode.param2
+		local facedir = to_facedir(param2, def.paramtype2)
+
+		selbox = rotate_box_facedir(selbox, facedir)
+		colbox = rotate_box_facedir(colbox, facedir)
+
 		self.object:set_properties({
-			node = {name = node.name, param2 = node.param1 or oldnode.param1, param2 = node.param2 or oldnode.param2},
+			node = {name = node.name, param2 = node.param1 or oldnode.param1, param2 = param2},
 			selectionbox = selbox,
 			glow = def.light_source,
 			physical = def.walkable or (def.walkable == nil),
