@@ -509,6 +509,7 @@ local oldnew = vector.new
 vector.new = function(x, y, z, r)
 	local newvec = oldnew(x, y, z)
 	newvec.relative = r or type(x) == "table" and x.relative
+	if newvec.relative == false then newvec.relative = nil end
 	return newvec
 end
 
@@ -1131,7 +1132,7 @@ end
 local uncsvify_pos = function(str)
 	local separate = str:split("@", true, 1)
 	local pos = core.string_to_pos("("..separate[1]..")")
-	if not pos then return end
+	if not pos then return nil end
 	pos.relative = separate[2]
 	return pos
 end

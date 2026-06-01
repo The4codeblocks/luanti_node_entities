@@ -132,3 +132,23 @@ if core.get_modpath("mesecons_luacontroller") then
 		end
 	end
 end
+
+-- sbz_luacontroller: utils.lua
+
+if core.global_exists("sbz_luacs") then
+	function sbz_luacs.is_vector(any)
+		if type(any) ~= "table" then return false end
+
+		for k, v in pairs(any) do
+			if k == "relative" then
+				if type(v) ~= "string" then return end
+				if v:sub(1,1) ~=  "@" then return end
+			else
+				if not (k == "x" or k == "y" or k == "z") then return false end
+				if type(v) ~= "number" then return false end
+			end
+		end
+		return true
+	end
+end
+
