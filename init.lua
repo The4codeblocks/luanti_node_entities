@@ -826,7 +826,11 @@ local step = function(self, dtime, moveresult)
 	self.object:set_properties({infotext = self._metadata:get_string("infotext")})
 	for _, abm in ipairs(core.registered_abms) do
 		if ((timer.abm % abm.interval) > (newtimerabm % abm.interval)) and (math.random(abm.chance) == 1) then
-			for _, name in ipairs(abm.nodenames) do
+			local nodenames = abm.nodenames
+			if type(nodenames) == "string" then
+				nodenames = {nodenames}
+			end
+			for _, name in ipairs(nodenames) do
 				if (node.name == name) or ((name:sub(1,6) == "group:") and (core.get_item_group(node.name, name:sub(7)) ~= 0)) then
 					if check_neighbors(pos, abm.neighbors, abm.without_neighbors) then
 						abm.action(pos, node, 0, 0, self, dtime, moveresult) -- missing object counts
