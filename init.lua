@@ -660,30 +660,41 @@ end
 
 local invcallbacks = function(entity)
 	local relpos = construct_relpos(entity)
-	local def = core.registered_nodes[entity:get_node().name]
 	return {
-	allow_move = def.allow_metadata_inventory_move and function(_, from_list, from_index, to_list, to_index, count, player)
-		return def.allow_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
+	allow_move = function(_, from_list, from_index, to_list, to_index, count, player)
+		local def = core.registered_nodes[entity:get_node().name].allow_metadata_inventory_move
+		if not def then return end
+		return def(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 	end,
 
-	allow_put = def.allow_metadata_inventory_put and function(_, listname, index, stack, player)
-		return def.allow_metadata_inventory_put(relpos, listname, index, stack, player, entity)
+	allow_put = function(_, listname, index, stack, player)
+		local def = core.registered_nodes[entity:get_node().name].allow_metadata_inventory_put
+		if not def then return end
+		return def(relpos, listname, index, stack, player, entity)
 	end,
 
-	allow_take = def.allow_metadata_inventory_take and function(_, listname, index, stack, player)
-		return def.allow_metadata_inventory_take(relpos, listname, index, stack, player, entity)
+	allow_take = function(_, listname, index, stack, player)
+		local def = core.registered_nodes[entity:get_node().name].allow_metadata_inventory_take
+		if not def then return end
+		return def(relpos, listname, index, stack, player, entity)
 	end,
 
-	on_move = def.on_metadata_inventory_move and function(_, from_list, from_index, to_list, to_index, count, player)
-		return def.on_metadata_inventory_move(relpos, from_list, from_index, to_list, to_index, count, player, entity)
+	on_move = function(_, from_list, from_index, to_list, to_index, count, player)
+		local def = core.registered_nodes[entity:get_node().name].on_metadata_inventory_move
+		if not def then return end
+		return def(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 	end,
 
-	on_put = def.on_metadata_inventory_put and function(_, listname, index, stack, player)
-		return def.on_metadata_inventory_put(relpos, listname, index, stack, player, entity)
+	on_put = function(_, listname, index, stack, player)
+		local def = core.registered_nodes[entity:get_node().name].on_metadata_inventory_put
+		if not def then return end
+		return def(relpos, listname, index, stack, player, entity)
 	end,
 
-	on_take = def.on_metadata_inventory_take and function(_, listname, index, stack, player)
-		return def.on_metadata_inventory_take(relpos, listname, index, stack, player, entity)
+	on_take = function(_, listname, index, stack, player)
+		local def = core.registered_nodes[entity:get_node().name].on_metadata_inventory_take
+		if not def then return end
+		return def(relpos, listname, index, stack, player, entity)
 	end,
 } end
 
@@ -728,7 +739,9 @@ local rclick = function(self, clicker)
 			else
 				fs_context[fname] = {[pname] = true}
 			end
-			core.show_formspec(pname, fname, parseformspec(fs, self))
+			local parsedfs = parseformspec(fs, self)
+			self._prevfs = parsedfs
+			core.show_formspec(pname, fname, parsedfs)
 		elseif clicker and not def.on_rightclick then
 			local wielded = clicker:get_wielded_item()
 			local itemname = wielded:get_name()
@@ -832,7 +845,8 @@ local step = function(self, dtime, moveresult)
 	local parsedfs = parseformspec(fs, self)
 	if self._prevfs and (parsedfs ~= self._prevfs) then
 		for pname, _ in pairs(fs_context[fname] or {}) do
-			core.show_formspec(pname, fname, fs)
+			core.show_formspec(pname, fname, parsedfs)
+			self._prevfs = parsedfs
 		end
 	end
 	local newtimerabm = timer.abm + dtime
