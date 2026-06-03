@@ -1052,6 +1052,7 @@ core.register_entity(nodesetname, {
 		self._scale = newscale
 	end,
 	on_activate = function(self, staticdata, _)
+		self.object:set_armor_groups({immortal=1})
 		self._attachments = {}
 		self._scale = 1
 		if staticdata and staticdata ~= "" then
