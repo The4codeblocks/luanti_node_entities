@@ -1,6 +1,8 @@
 # Node entity library (`nodeentity`)
 Library for functional node entities, with minimal setup
 
+[ContentDB page](https://content.luanti.org/packages/The4spaceconstants/nodeentity/)
+
 Node entities should act exactly like normal nodes
 <br><sup>any discrepancy should be reported</sup>
 
