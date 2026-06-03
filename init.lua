@@ -325,16 +325,10 @@ end
 
 local oldsoundplay = core.sound_play
 core.sound_play = function(spec, parameters, ephemeral)
-	if not parameters.pos then return oldsoundplay(spec, parameters, ephemeral) end
+	if not parameters or not parameters.pos then return oldsoundplay(spec, parameters, ephemeral) end
 	local parameters = table.copy(parameters)
-	local pos = parameters.pos
-	local nodeentitypos = find_nodeentity(pos)
-	if nodeentitypos then
-		if nodeentitypos.object then
-			parameters.pos = convert_pos(pos)
-		else
-			parameters.pos = pos
-		end
+	parameters.pos = convert_pos(parameters.pos)
+	if parameters.pos then
 		return oldsoundplay(spec, parameters, ephemeral)
 	end
 end
