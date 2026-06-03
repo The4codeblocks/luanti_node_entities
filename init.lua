@@ -642,11 +642,11 @@ local function check_neighbors(pos, include, exclude)
 		if not icheck then
 			if includeset[name] then icheck = true end
 			for _, group in ipairs(igroups) do
-				if core.get_item_group(name, group) then icheck = true end
+				if core.get_item_group(name, group) ~= 0 then icheck = true end
 			end
 		end
 		for _, group in ipairs(egroups) do
-			if core.get_item_group(name, group) then return false end
+			if core.get_item_group(name, group) ~= 0 then return false end
 		end
 	end
 	return icheck
