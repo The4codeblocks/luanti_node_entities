@@ -657,19 +657,19 @@ local invcallbacks = function(entity)
 	return {
 	allow_move = function(_, from_list, from_index, to_list, to_index, count, player)
 		local def = core.registered_nodes[entity:get_node().name].allow_metadata_inventory_move
-		if not def then return end
+		if not def then return count end
 		return def(relpos, from_list, from_index, to_list, to_index, count, player, entity)
 	end,
 
 	allow_put = function(_, listname, index, stack, player)
 		local def = core.registered_nodes[entity:get_node().name].allow_metadata_inventory_put
-		if not def then return end
+		if not def then return stack:get_count() end
 		return def(relpos, listname, index, stack, player, entity)
 	end,
 
 	allow_take = function(_, listname, index, stack, player)
 		local def = core.registered_nodes[entity:get_node().name].allow_metadata_inventory_take
-		if not def then return end
+		if not def then return stack:get_count() end
 		return def(relpos, listname, index, stack, player, entity)
 	end,
 
