@@ -21,7 +21,7 @@ local veczero = vector.zero()
 
 local create_detached_nodemeta = function(name, callbacks)
 	local meta = ItemStack():get_meta()
-	local inv = core.create_detached_inventory(name, callbacks)
+	local new_inv = core.create_detached_inventory(name, callbacks)
 	local detnmmt = table.copy(getmetatable(ItemStack():get_meta())) -- [det]ached [n]ode [m]etadata [m]eta[t]able
 
 	detnmmt.set_tool_capabilities = nil
@@ -34,7 +34,7 @@ local create_detached_nodemeta = function(name, callbacks)
 		end
 	end
 	detnmmt.mark_as_private = function()end
-	detnmmt.get_inventory = function() return inv end
+	detnmmt.get_inventory = function() return new_inv end
 
 	local oldtotable = detnmmt.to_table
 	detnmmt.to_table = function(self)
@@ -326,7 +326,7 @@ end
 local oldsoundplay = core.sound_play
 core.sound_play = function(spec, parameters, ephemeral)
 	if not parameters or not parameters.pos then return oldsoundplay(spec, parameters, ephemeral) end
-	local parameters = table.copy(parameters)
+	parameters = table.copy(parameters)
 	parameters.pos = convert_pos(parameters.pos)
 	if parameters.pos then
 		return oldsoundplay(spec, parameters, ephemeral)
@@ -372,8 +372,8 @@ end
 local convert_func2 = function(location, key)
 	local oldfunc = location[key]
 	location[key] = function(a, b, ...)
-		local a = convert_pos(a)
-		local b = convert_pos(b)
+		a = convert_pos(a)
+		b = convert_pos(b)
 		return oldfunc(a, b, ...)
 	end
 end
@@ -747,7 +747,26 @@ local rclick = function(self, clicker)
 	end
 end
 
-local deactivate = function(self)
+local vector_to_nodeset_index = function(v)
+	return ("%04x|%04x|%04x"):format(v.x + 32768, v.y + 32768, v.z + 32768)
+end
+
+local nodeset_index_to_vector = function(i)
+	local listpos = i:split("|")
+	return vector.new(tonumber(listpos[1], 16) - 32768, tonumber(listpos[2], 16) - 32768, tonumber(listpos[3], 16) - 32768)
+end
+
+local deactivate = function(self, removal)
+	local relpos = construct_relpos(self)
+	local nodeset = core.objects_by_guid[relpos.relative]:get_luaentity()
+	local attachments = nodeset._attachments
+	if attachments then
+		if removal then
+			attachments[vector_to_nodeset_index(relpos)] = nil
+		else
+			attachments[vector_to_nodeset_index(relpos)] = self:get_staticdata()
+		end
+	end
 	if self._metadata then core.remove_detached_inventory("nodeentity" .. self.object:get_guid()) end
 end
 
@@ -918,6 +937,7 @@ core.register_entity(entityname, {
 
 		damage_texture_modifier = "^[brighten",
 		-- Texture modifier to be applied for a short duration when object is hit
+		static_save = false,
 	},
 
 	on_activate = activate,
@@ -1020,7 +1040,6 @@ core.register_entity(entityname, {
 			metadata = metadata,
 			timer = self._timer,
 			scale = self._scale,
-			guid = self.object:get_guid(), -- sometimes guid isn't accessible during initialization, this ensures that it's remembered
 			__version = 1 -- increment when changes are backwards-incompatible
 		})
 	end,
@@ -1030,6 +1049,16 @@ local nodeset_deserializations = {
 	function(self, data) -- version 1
 		self._attachments = data.attachments or {}
 		self._scale = data.scale or 1
+	end,
+	function(self, data) -- version 2
+		local attachments = data.attachments or {}
+		self._attachments = attachments
+		self._scale = data.scale or 1
+		local object = self.object
+		local initpos = object:get_pos()
+		for pos, staticdata in pairs(attachments) do
+			self:add_node(nodeset_index_to_vector(pos), core.add_entity(initpos, entityname, staticdata))
+		end
 	end,
 }
 
@@ -1046,10 +1075,21 @@ core.register_entity(nodesetname, {
 	},
 
 	add_node = function(self, pos, obj)
-		obj:set_attach(self.object, "", vector.multiply(pos, 10 * self._scale))
+		local scale = self._scale
+		obj:set_attach(self.object, "", vector.multiply(pos, 10 * scale))
+		self._attachments[vector_to_nodeset_index(pos)] = obj:get_guid()
+		obj:get_luaentity():set_scale(scale)
 	end,
 	set_scale = function(self, newscale)
 		self._scale = newscale
+		for pos, guid in pairs(self._attachments) do
+			local child = core.objects_by_guid[guid]
+			if child and child:is_valid() then
+				child:get_luaentity():set_scale(newscale)
+			else
+				self._attachments[pos] = nil
+			end
+		end
 	end,
 	on_activate = function(self, staticdata, _)
 		self.object:set_armor_groups({immortal=1})
@@ -1058,7 +1098,7 @@ core.register_entity(nodesetname, {
 		if staticdata and staticdata ~= "" then
 			local data = core.deserialize(staticdata)
 			if data then
-				local version = data.__version or 1 -- or <latest>
+				local version = data.__version or 2 -- or <latest>
 				nodeset_deserializations[version](self, data)
 			end
 		end
@@ -1066,29 +1106,18 @@ core.register_entity(nodesetname, {
 	on_step = function(self, _, _)
 		if not self._attachments then return end
 		if not next(self._attachments) then return self.object:remove() end -- remove when no node entities are attached
-		local object = self.object
-		local scale = self._scale
-		for pos, guid in pairs(self._attachments) do
-			local child = core.objects_by_guid[guid]
-			if child and child:is_valid() then
-				local listpos = pos:split("|")
-				child:set_attach(object, "", scale * 10 * vector.new(tonumber(listpos[1], 16) - 32768, tonumber(listpos[2], 16) - 32768, tonumber(listpos[3], 16) - 32768))
-				child:get_luaentity():set_scale(scale)
-			else
-				self._attachments[pos] = nil
-			end
-		end
-	end,
-	on_attach_child = function(self, child)
-		local _, _, attachpos = child:get_attach()
-		attachpos = attachpos / (10 * self._scale)
-		self._attachments[("%04x|%04x|%04x"):format(attachpos.x + 32768, attachpos.y + 32768, attachpos.z + 32768)] = child:get_guid()
 	end,
 	get_staticdata = function(self)
+		for i, guid in pairs(self._attachments) do
+			local obj = core.objects_by_guid[guid]
+			if obj then
+				self._attachments[i] = obj:get_luaentity():get_staticdata()
+			end
+		end
 		return core.serialize({
 			attachments = self._attachments,
 			scale = self._scale,
-			__version = 1 -- increment when changes are backwards-incompatible
+			__version = 2 -- increment when changes are backwards-incompatible
 		})
 	end,
 })
@@ -1169,9 +1198,9 @@ core.register_on_mods_loaded(function()
 end)
 
 function nodeentity.read_world(pos, anchor, minp, maxp)
-	local minp, maxp = vector.sort(convert_pos(minp), convert_pos(maxp))
-	local pos = convert_pos(pos)
-	local anchor = convert_pos(anchor)
+	minp, maxp = vector.sort(convert_pos(minp), convert_pos(maxp))
+	pos = convert_pos(pos)
+	anchor = convert_pos(anchor)
 	assert(pos, "can't read from the void")
 	assert(anchor, "can't place in the void")
 	local vm = VoxelManip(minp, maxp)
