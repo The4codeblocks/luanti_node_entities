@@ -9,11 +9,12 @@ Node entities should act exactly like normal nodes
 ## Namespace reference
 ```lua
 nodeentity = {
-	function add(pos, node), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)
-	function read_world(pos, anchor, minp, maxp), -- creates a nodeset at <pos> with nodes from <minp> to <maxp> relative to <anchor>
-	function relative_pos(object), -- given a node object, a position is constructed from which to access the node entity like one'd access normal nodes, returns:
-        -- relative_pos, nodeset_exists
-	function get(pos), -- given a position, a node entity is obtained -- returns:
+	add = function(pos, node), -- creates a functional node entity at specified position in accordance to specified MapNode table (actually returns an ObjectRef)
+		-- standalone node entities are deprecated, this is for use with nodeset:add_node()
+	read_world = function(pos, anchor, minp, maxp), -- creates a nodeset at <pos> with nodes from <minp> to <maxp> relative to <anchor>
+	relative_pos = function(object), -- given a node object, a position is constructed from which to access the node entity like one'd access normal nodes, returns
+		-- relative_pos, nodeset_exists
+	get = function(pos), -- given a position, a node entity is obtained -- returns:
 		-- nodeentity, (entity if present) (pos if pos.relative is absent) (empty table if only nodeset is found) (nil if invalid pos)
 		-- nodeset (nil if invalid pos)
 	entityname, -- name of node entity
@@ -51,12 +52,15 @@ local position = {
 ### Entity fields
 ```lua
 local entity = {
-	...
-	_attachments, -- internal table for persistent attachment and updating scale of nodeentities
-	_scale, -- scale of nodeset, do not set directly
-	function set_scale(self, newscale), -- sets scale of nodeset
-	function add_node(pos, nodeobject), -- adds a node entity to a node set, only use if the node entity to add is already present
-	...
+	...,
+	_attachments = {
+        [("%04x|%04x|%04x"):format(x + 32768, y + 32768, z + 32768)]
+        	= entity.object:get_guid()
+    }, -- internal table for updating scale of and tracking nodeentities
+	_scale = 1, -- scale of nodeset, do not set directly
+	set_scale = function(self, newscale), -- sets scale of nodeset
+	add_node = function(pos, nodeobject), -- adds a node entity to a node set, only use if the node entity to add is already present
+	...,
 }
 ```
 
@@ -64,9 +68,12 @@ local entity = {
 Some fields are omissible
 ```lua
 local staticdata = core.serialize({
-    attachments, -- internal table for persistent attachment and updating scale of nodeentities
-    scale, -- scale of nodeset
-    __version = 1 -- serialization version, do not set unless you know what you are doing
+	attachments = {
+		[("%04x|%04x|%04x"):format(x + 32768, y + 32768, z + 32768)]
+			= entity:get_staticdata()
+	}, -- table containing serialized nodeentities, indexed by position relative to nodeset
+	scale = 1, -- scale of nodeset
+	__version = 2 -- serialization version, do not set unless you know what you are doing
 })
 ```
 
@@ -74,7 +81,7 @@ local staticdata = core.serialize({
 ```lua
 local nodedef = {
 	...
-	function _nodeentity_step(self, dtime, moveresult), -- runs exclusively on node entities, identical to <step> in entity defintions
+	_nodeentity_step = function(self, dtime, moveresult), -- runs exclusively on node entities, identical to <step> in entity defintions
 	<other callbacks> -- current entity is appended to the end of function arguments (abms and lbms included)
 	...
 }
@@ -84,8 +91,8 @@ local nodedef = {
 ```lua
 local entity = {
 	...
-	function set_scale(self, newscale), -- sets scale of nodeentity
-	_scale, -- scale of nodeentity, do not set directly
+	set_scale = function(self, newscale), -- sets scale of nodeentity
+	_scale = 1, -- scale of nodeentity, do not set directly
 	_metadata, -- imitation of NodeMetaRef
 	_timer, -- Lua implementation of NodeTimerRef
 	...
@@ -96,11 +103,10 @@ local entity = {
 Some fields are omissible
 ```lua
 local staticdata = core.serialize({
-    node, -- MapNode *table*, do not omit!
-    metadata, -- serializable table form of NodeMetaRef, take care to ensure that the inventory section uses itemstrings rather than itemstacks
-    timer, -- Lua implementation of NodeTimerRef, do not set unless you know what you are doing
-    scale, -- nodeentity scale
-    guid, -- guid of node object, do not set!
-    __version = 1 -- serialization version, do not set unless you know what you are doing
+	node, -- MapNode *table*, do not omit!
+	metadata, -- serializable table form of NodeMetaRef, take care to ensure that the inventory section uses itemstrings rather than itemstacks
+	timer, -- Lua implementation of NodeTimerRef, do not set unless you know what you are doing
+	scale = 1, -- nodeentity scale
+	__version = 1 -- serialization version, do not set unless you know what you are doing
 })
 ```
