@@ -1075,6 +1075,7 @@ core.register_entity(nodesetname, {
 	},
 
 	add_node = function(self, pos, obj)
+		if not obj then return end
 		local scale = self._scale
 		obj:set_attach(self.object, "", vector.multiply(pos, 10 * scale))
 		self._attachments[vector_to_nodeset_index(pos)] = obj:get_guid()
